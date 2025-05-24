@@ -1,6 +1,7 @@
 import pytest
 import psycopg2
 from unittest.mock import patch, MagicMock
+from crud.database import db
 
 @pytest.fixture
 def mock_db():
@@ -13,24 +14,3 @@ def mock_db():
                 "cursor": mock_cursor,
                 "conn": mock_conn
         }
-
-@pytest.fixture
-def db_connection(postgresql):
-    conn = psycopg2.connect(
-        dbname=postgresql.info.dbname,
-        user=postgresql.info.user,
-        password=postgresql.info.password,
-        host=postgresql.info.host,
-        port=postgresql.info.port
-    )
-
-    with conn.cursor() as cur:
-        with open("sql/database_test.sql", "r", encoding="utf-8") as f:
-            cur.execute(f.read())
-    conn.commit()
-
-    yield conn
-
-    conn.rollback()
-    conn.close()
-

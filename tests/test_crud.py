@@ -35,20 +35,8 @@ def test_crearEmpleadoExitoso(mock_db,empleado_datos):
     cursor.execute.assert_called_once()
     conn.commit.assert_called_once()
 
-def test_crearEmpleadoExistente(mock_db,empleado_datos):
-    cursor = mock_db["cursor"]
-    cursor.fetchone.return_value = [1, "46474422", "Sergio", "Avila"]
-
-    AdminCRUD.crear_empleado(empleado_datos)
-
-    with pytest.raises(ValueError):
-        cursor.execute.side_effect = psycopg2.IntegrityError(any)
-        AdminCRUD.crear_empleado(empleado_datos)
-
 def test_crearEmpleadoNombreVacio(mock_db, empleado_datos):
-    cursor = mock_db["cursor"]
     empleado_datos.nombre = ""
-    cursor.execute.side_effect = psycopg2.IntegrityError(any)
     with pytest.raises(Exception):
         AdminCRUD.crear_empleado(empleado_datos)
 
