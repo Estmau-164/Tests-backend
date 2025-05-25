@@ -20,4 +20,3 @@ typing_extensions==4.13.2
 uvicorn==0.34.2
 
 pytest==8.3.5
-pytest-postgresql==7.0.2

@@ -1,16 +1,39 @@
 import pytest
-import psycopg2
-from unittest.mock import patch, MagicMock
-from crud.database import db
+from crud.database import Database
+from crud import crudAdmintrador
+from testcontainers.postgres import PostgresContainer
+import os
+
 
 @pytest.fixture
-def mock_db():
-    with patch("crud.crudAdmintrador.db.conn") as mock_conn:  
-        #Simulo cursor
-        mock_cursor = MagicMock()
-        #Simulo conexion
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        yield {
-                "cursor": mock_cursor,
-                "conn": mock_conn
-        }
+def test_db():
+    db_config = {
+        "dbname": "database_labo_test",
+        "user": "database_tester_admin",
+        "password": "tEstLabO!239",
+        "host": "localhost",
+        "port": "5432",
+        "sslmode": "require",
+        "connect_timeout": 5,
+    }
+
+    # Instancia con la configuración temporal
+    db_instance = Database()
+    db_instance._config = db_config
+
+    crudAdmintrador.db = db_instance
+
+    # Cargar archivo SQL con tablas y triggers
+    schema_path = os.path.join(os.path.dirname(__file__), "sql", "test_schema.sql")
+    with open(schema_path, "r") as f:
+        schema_sql = f.read()
+
+    conn = db_instance.get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(schema_sql)
+        conn.commit()
+    finally:
+        db_instance.return_connection(conn)
+
+    yield db_instance
