@@ -5,7 +5,8 @@ from testcontainers.postgres import PostgresContainer
 import os
 
 
-@pytest.fixture
+# Cambia la instancia de db para usar una base de datos local para los tests
+@pytest.fixture(scope="session")
 def test_db():
     db_config = {
         "dbname": "database_labo_test",
@@ -22,18 +23,21 @@ def test_db():
     db_instance._config = db_config
 
     crudAdmintrador.db = db_instance
+    yield db_instance
 
+
+# Limpia la base de datos antes de cada test
+@pytest.fixture
+def setup_schema(test_db):
     # Cargar archivo SQL con tablas y triggers
     schema_path = os.path.join(os.path.dirname(__file__), "sql", "test_schema.sql")
     with open(schema_path, "r") as f:
         schema_sql = f.read()
 
-    conn = db_instance.get_connection()
+    conn = test_db.get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(schema_sql)
         conn.commit()
     finally:
-        db_instance.return_connection(conn)
-
-    yield db_instance
+        test_db.return_connection(conn)
