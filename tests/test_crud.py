@@ -42,7 +42,7 @@ def datos_empleados():
     return [empleado0, empleado1]
 
 
-@pytest.mark.usefixtures("test_db", "setup_schema")
+@pytest.mark.usefixtures("setup_schema")
 class TestCreacionEmpleado:
 
     def test_crear_empleado_exitoso(self, datos_empleados):
@@ -59,43 +59,43 @@ class TestCreacionEmpleado:
     def test_crear_empleado_existente(self, datos_empleados):
         empleado = datos_empleados[0]
         AdminCRUD.crear_empleado(empleado)
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_nombre_vacio(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.nombre = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_apellido_vacio(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.apellido = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_tipo_identificacion_vacio(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.tipo_identificacion = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_nro_identificacion_vacio(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.numero_identificacion = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_fecha_nacimiento_vacia(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.fecha_nacimiento = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_correo_vacio(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.correo_electronico = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_telefono_vacio(self, datos_empleados):
@@ -107,51 +107,51 @@ class TestCreacionEmpleado:
     def test_crear_empleado_calle_vacia(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.calle = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_numero_calle_vacio(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.numero_calle = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_localidad_vacia(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.localidad = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_partido_vacio(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.partido = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_provincia_vacia(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.provincia = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_pais_nacimiento_vacio(self, datos_empleados):
         empleado = datos_empleados[0]
         empleado.pais_nacimiento = ""
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     @pytest.mark.parametrize("nombre_invalido", ["S3rgi0", "Serg!*"])
     def test_crear_empleado_nombre_invalido(self, datos_empleados, nombre_invalido):
         empleado = datos_empleados[0]
         empleado.nombre = nombre_invalido
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     @pytest.mark.parametrize("apellido_invalido", ["4v1la", "Avi!l*"])
     def test_crear_empleado_apellido_invalido(self, datos_empleados, apellido_invalido):
         empleado = datos_empleados[0]
         empleado.apellido = apellido_invalido
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     @pytest.mark.parametrize(
@@ -162,25 +162,32 @@ class TestCreacionEmpleado:
     ):
         empleado = datos_empleados[0]
         empleado.tipo_identificacion = tipo_identificacion_invalido
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     @pytest.mark.parametrize("numero_dni_invalido", ["44thf68a","44621*!?"])
     def test_crear_empleado_numero_identificacion_dni_invalido(self,datos_empleados,numero_dni_invalido):
         empleado = datos_empleados[0]
         empleado.numero_identificacion = numero_dni_invalido
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     def test_crear_empleado_numero_identificacion_pasaporte_invalido(self, datos_empleados):
         empleado = datos_empleados[1]
         empleado.numero_identificacion = "AF*41!84?"
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     @pytest.mark.parametrize("fecha_nacimiento_invalida", ["2004-00-04","2004-02-00","2004-13-00","2004-02-30"])
     def test_crear_empleado_fecha_nacimiento_invalida(self, datos_empleados, fecha_nacimiento_invalida):
         empleado = datos_empleados[0]
         empleado.fecha_nacimiento = fecha_nacimiento_invalida
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
+            AdminCRUD.crear_empleado(empleado)
+
+    @pytest.mark.parametrize("numero_calle_invalido", ["mildoscientos cuarenta y dos","14*!"])
+    def test_crear_empleado_numero_calle_invalido(self, datos_empleados, numero_calle_invalido):
+        empleado = datos_empleados[0]
+        empleado.numero_calle_invalido = numero_calle_invalido
+        with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)

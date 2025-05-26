@@ -10,54 +10,66 @@ from api.schemas import EmpleadoResponse
 
 class AdminCRUD:
 
-
     @staticmethod
     def crear_empleado(nuevo_empleado):
         conn = None
         try:
             conn = db.get_connection()
             cur = conn.cursor()
-            # Convertir numero_calle a string si es necesario
+
             numero_calle = str(nuevo_empleado.numero_calle) if hasattr(nuevo_empleado, 'numero_calle') else None
 
-            # Query con RETURNING para obtener el ID generado
             cur.execute(
-                    """
-                    INSERT INTO empleado (
-                        nombre, apellido, tipo_identificacion, numero_identificacion,
-                        fecha_nacimiento, correo_electronico, telefono, calle,
-                        numero_calle, localidad, partido, provincia, genero, 
-                        pais_nacimiento, estado_civil
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id_empleado, nombre, apellido, numero_identificacion, 
-                              numero_calle, telefono, correo_electronico  # Agrega campos necesarios
-                    """,
-                    (
-                        nuevo_empleado.nombre, nuevo_empleado.apellido, nuevo_empleado.tipo_identificacion,
-                        nuevo_empleado.numero_identificacion, nuevo_empleado.fecha_nacimiento,
-                        nuevo_empleado.correo_electronico, nuevo_empleado.telefono, nuevo_empleado.calle,
-                        numero_calle, nuevo_empleado.localidad, nuevo_empleado.partido,
-                        nuevo_empleado.provincia, nuevo_empleado.genero, nuevo_empleado.pais_nacimiento,
-                        nuevo_empleado.estado_civil
-                    )
+                """
+                INSERT INTO empleado (
+                    nombre, apellido, tipo_identificacion, numero_identificacion,
+                    fecha_nacimiento, correo_electronico, telefono, calle,
+                    numero_calle, localidad, partido, provincia, genero, 
+                    pais_nacimiento, estado_civil
                 )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id_empleado, nombre, apellido, numero_identificacion, 
+                          numero_calle, telefono, correo_electronico
+                """,
+                (
+                    nuevo_empleado.nombre, nuevo_empleado.apellido, nuevo_empleado.tipo_identificacion,
+                    nuevo_empleado.numero_identificacion, nuevo_empleado.fecha_nacimiento,
+                    nuevo_empleado.correo_electronico, nuevo_empleado.telefono, nuevo_empleado.calle,
+                    numero_calle, nuevo_empleado.localidad, nuevo_empleado.partido,
+                    nuevo_empleado.provincia, nuevo_empleado.genero, nuevo_empleado.pais_nacimiento,
+                    nuevo_empleado.estado_civil
+                )
+            )
 
-            # Obtener todos los datos del empleado creado
             resultado = cur.fetchone()
-            db.conn.commit()
+            conn.commit()
 
-            # Construir respuesta con TODOS los campos requeridos por el modelo Pydantic
             return {
-                    "id_empleado": resultado[0],  # Asegúrate de incluir esto
-                    "nombre": resultado[1],
-                    "apellido": resultado[2],
-                    "numero_identificacion": resultado[3],
-                    "numero_calle": resultado[4],
-                    "telefono": resultado[5],
-                    "correo_electronico": resultado[6],
-                    # Incluye todos los demás campos que tu modelo Pydantic requiera
-                }
+                "id_empleado": resultado[0],
+                "nombre": resultado[1],
+                "apellido": resultado[2],
+                "tipo_identificacion": nuevo_empleado.tipo_identificacion,
+                "numero_identificacion": resultado[3],
+                "fecha_nacimiento": nuevo_empleado.fecha_nacimiento,
+                "correo_electronico": resultado[6],
+                "telefono": resultado[5],
+                "calle": nuevo_empleado.calle,
+                "numero_calle": resultado[4],
+                "localidad": nuevo_empleado.localidad,
+                "partido": nuevo_empleado.partido,
+                "provincia": nuevo_empleado.provincia,
+                "genero": nuevo_empleado.genero,
+                "pais_nacimiento": nuevo_empleado.pais_nacimiento,  # Ajustar nombre del campo si hace falta
+                "estado_civil": nuevo_empleado.estado_civil
+            }
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print(f"[ERROR] Error al crear empleado: {e}")
+            raise
+
+
 
         except Exception as e:
             db.conn.rollback()

@@ -11,14 +11,13 @@ from contextlib import contextmanager
 class Database:
     # Configuración para Supabase (actualizada)
     _config = {
-        "dbname": "database_labo",  # Nombre de la BD en Supabase (por defecto es 'postgres')
-        "user": "database_labo_owner",    # Usuario por defecto en Supabase
-        "password": "npg_T2tevF4uMhZB",  # Contraseña (DEBES configurarla en .env)
-        "host": "ep-gentle-poetry-a48jtsf3-pooler.us-east-1.aws.neon.tech",  # Endpoint de Supabase
-        "port": "5432",        # Puerto por defecto
-        "sslmode": "require",  # SSL obligatorio para Neon
-        "connect_timeout": 5  # Timeout de conexión de 5 segundos
-
+        "dbname": "database_labo_test",
+        "user": "database_tester_admin",
+        "password": "tEstLabO!239",
+        "host": "localhost",
+        "port": "5432",
+        "sslmode": "disable",
+        "connect_timeout": 5,
     }
 
     def __init__(self):

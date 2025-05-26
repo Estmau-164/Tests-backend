@@ -1,8 +1,8 @@
---Borramos todo el SCHEMA public que contiene las tablas, vistas y triggers y luego solo los creamos
+
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 
---Creacion de tablas
+
 CREATE TABLE empleado (
     id_empleado SERIAL PRIMARY KEY NOT NULL,
     nombre VARCHAR(50) NOT NULL,
@@ -33,12 +33,12 @@ CREATE TABLE empleado (
 CREATE TABLE periodo_empleado (
     id_periodo SERIAL PRIMARY KEY,
     id_empleado INTEGER NOT NULL REFERENCES empleado(id_empleado),
-    periodo_fecha DATE NOT NULL, -- Seria el primer dia del mes tipo 2025-05-1
+    periodo_fecha DATE NOT NULL, 
     presentismo BOOLEAN NOT NULL DEFAULT TRUE,
     porcentaje_asistencia NUMERIC(5,2), 
     faltas_justificadas INTEGER DEFAULT 0,
     faltas_injustificadas INTEGER DEFAULT 0,
-    periodo_texto VARCHAR(20), --Seria el periodo en formato 'MAYO 2025'
+    periodo_texto VARCHAR(20), 
     valor_hora NUMERIC(10,2),
     UNIQUE(id_empleado,periodo_fecha)
 );
@@ -296,7 +296,6 @@ CREATE TABLE error_sistema(
 	fecha_error TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
---Creacion de vistas
 CREATE OR REPLACE VIEW calendario AS
 SELECT 
     rj.id_empleado,
@@ -378,7 +377,66 @@ JOIN
 JOIN
         periodo_empleado pe ON n.id_periodo = pe.id_periodo AND n.id_empleado = pe.id_empleado;
 
---Creacion de triggers
+
+CREATE OR REPLACE FUNCTION obtener_o_crear_periodo_empleado(p_id_empleado INTEGER, p_fecha DATE) RETURNS INTEGER AS $$
+DECLARE
+    nombre_periodo VARCHAR(20);
+    mes_es VARCHAR(20);
+    id_de_periodo INTEGER;
+BEGIN
+		mes_es := CASE TO_CHAR(p_fecha, 'MM')
+    		WHEN '01' THEN 'ENERO'
+    		WHEN '02' THEN 'FEBRERO'
+    		WHEN '03' THEN 'MARZO'
+    		WHEN '04' THEN 'ABRIL'
+    		WHEN '05' THEN 'MAYO'
+    		WHEN '06' THEN 'JUNIO'
+    		WHEN '07' THEN 'JULIO'
+    		WHEN '08' THEN 'AGOSTO'
+    		WHEN '09' THEN 'SEPTIEMBRE'
+    		WHEN '10' THEN 'OCTUBRE'
+    		WHEN '11' THEN 'NOVIEMBRE'
+    		WHEN '12' THEN 'DICIEMBRE'
+ 	 END;
+
+ 	 nombre_periodo := mes_es || ' ' || TO_CHAR(p_fecha, 'YYYY');
+         
+		SELECT id_periodo INTO id_de_periodo 
+		FROM periodo_empleado 
+		WHERE id_empleado = p_id_empleado
+		AND periodo_texto = nombre_periodo;
+
+		IF NOT FOUND THEN
+    			-- Insertar nuevo periodo_empleado
+    			INSERT INTO periodo_empleado (
+        		id_empleado,
+        		periodo_fecha,
+        		presentismo,
+        		porcentaje_asistencia,
+        		faltas_justificadas,
+        		faltas_injustificadas,
+        		periodo_texto,
+        		valor_hora
+    			) VALUES (
+        		p_id_empleado,
+        		DATE_TRUNC('month', p_fecha),
+        		TRUE,
+        		0,
+        		0,
+        		0,
+        		nombre_periodo,
+        		0  
+    			)
+    			RETURNING id_periodo INTO id_de_periodo;
+		END IF;
+
+		RETURN id_de_periodo;
+END;
+
+$$LANGUAGE plpgsql;
+
+
+
 	CREATE OR REPLACE FUNCTION insertar_registro_jornada_hora_extra () RETURNS TRIGGER AS $$
 	DECLARE
 		hora_entrada TIME;
@@ -419,37 +477,19 @@ JOIN
 	
 		--Obtener el periodo
 		
-		mes_es := CASE TO_CHAR(NEW.fecha, 'MM')
-				WHEN '01' THEN 'ENERO'
-				WHEN '02' THEN 'FEBRERO'
-				WHEN '03' THEN 'MARZO'
-				WHEN '04' THEN 'ABRIL'
-				WHEN '05' THEN 'MAYO'
-				WHEN '06' THEN 'JUNIO'
-				WHEN '07' THEN 'JULIO'
-				WHEN '08' THEN 'AGOSTO'
-				WHEN '09' THEN 'SEPTIEMBRE'
-				WHEN '10' THEN 'OCTUBRE'
-				WHEN '11' THEN 'NOVIEMBRE'
-				WHEN '12' THEN 'DICIEMBRE'
-		 END;
-	
-		 nombre_periodo := mes_es || ' ' || TO_CHAR(NEW.fecha, 'YYYY');
-			 
-		 SELECT id_periodo INTO id_de_periodo FROM periodo_empleado WHERE id_empleado=NEW.id_empleado
-		 AND periodo_texto=nombre_periodo;
+		id_de_periodo:=obtener_o_crear_periodo_empleado(NEW.id_empleado, NEW.fecha) ;
 		
-			-- Obtener horas estipuladas para el empleado
-			SELECT cantidad_horas_trabajo 
-			INTO horas_de_trabajo_estipuladas
-			FROM informacion_laboral 
-			WHERE id_empleado = NEW.id_empleado;
+		-- Obtener horas estipuladas para el empleado
+		SELECT cantidad_horas_trabajo 
+		INTO horas_de_trabajo_estipuladas
+		FROM informacion_laboral 
+		WHERE id_empleado = NEW.id_empleado;
 	
-			-- Calcular intervalo de trabajo
-			horas_interval := NEW.hora - hora_entrada;
+		-- Calcular intervalo de trabajo
+		horas_interval := NEW.hora - hora_entrada;
 	
-			-- Calcular horas totales trabajadas
-			horas_trabajadas := ROUND(EXTRACT(EPOCH FROM horas_interval) / 3600);
+		-- Calcular horas totales trabajadas
+		horas_trabajadas := ROUND(EXTRACT(EPOCH FROM horas_interval) / 3600);
 	
 		--Calcular horas normales trabajadas sin horas extras
 		IF horas_trabajadas > horas_de_trabajo_estipuladas THEN
@@ -517,48 +557,29 @@ DECLARE
     fecha_domingo DATE;
     nombre_periodo VARCHAR(20);
     mes_es VARCHAR(20);
-    id_de_periodo INTEGER;
+    id_de_periodo_sabado INTEGER;
+	id_de_periodo_domingo INTEGER;
 BEGIN
-	--Obtener el periodo
-	
-	mes_es := CASE TO_CHAR(NEW.fecha, 'MM')
-    		WHEN '01' THEN 'ENERO'
-    		WHEN '02' THEN 'FEBRERO'
-    		WHEN '03' THEN 'MARZO'
-    		WHEN '04' THEN 'ABRIL'
-    		WHEN '05' THEN 'MAYO'
-    		WHEN '06' THEN 'JUNIO'
-    		WHEN '07' THEN 'JULIO'
-    		WHEN '08' THEN 'AGOSTO'
-    		WHEN '09' THEN 'SEPTIEMBRE'
-    		WHEN '10' THEN 'OCTUBRE'
-    		WHEN '11' THEN 'NOVIEMBRE'
-    		WHEN '12' THEN 'DICIEMBRE'
- 	 END;
-
- 	 nombre_periodo := mes_es || ' ' || TO_CHAR(NEW.fecha, 'YYYY');
-         
-	 SELECT id_periodo INTO id_de_periodo FROM periodo_empleado WHERE id_empleado=NEW.id_empleado
-	 AND periodo_texto=nombre_periodo;
-
     IF NEW.dia = 'Viernes' THEN 
        SELECT tipo_semana_laboral INTO tipo_semana FROM informacion_laboral WHERE id_empleado = NEW.id_empleado;
         
         fecha_sabado := NEW.fecha + INTERVAL '1 day';
         fecha_domingo := NEW.fecha + INTERVAL '2 days';
+		id_de_periodo_sabado:=obtener_o_crear_periodo_empleado(NEW.id_empleado, fecha_sabado) ;
+		id_de_periodo_domingo:=obtener_o_crear_periodo_empleado(NEW.id_empleado, fecha_domingo);
         
         IF tipo_semana = 'Normal' THEN
             -- Inserta sábado
             INSERT INTO incidencia_asistencia (id_empleado,id_periodo,fecha, dia, tipo, descripcion)
-            VALUES (NEW.id_empleado, id_de_periodo,fecha_sabado, 'Sábado', 'No laboral', 'No corresponde debido a su tipo de semana laboral');
+            VALUES (NEW.id_empleado, id_de_periodo_sabado,fecha_sabado, 'Sábado', 'No laboral', 'No corresponde debido a su tipo de semana laboral');
             -- Inserta domingo
             INSERT INTO incidencia_asistencia (id_empleado,id_periodo, fecha, dia, tipo, descripcion)
-            VALUES (NEW.id_empleado,id_de_periodo, fecha_domingo, 'Domingo', 'No laboral', 'No corresponde debido a su tipo de semana laboral');
+            VALUES (NEW.id_empleado,id_de_periodo_domingo, fecha_domingo, 'Domingo', 'No laboral', 'No corresponde debido a su tipo de semana laboral');
         
         ELSIF tipo_semana = 'Extendida' THEN
             -- Inserta solo domingo
             INSERT INTO incidencia_asistencia (id_empleado,id_periodo, fecha, dia, tipo, descripcion)
-            VALUES (NEW.id_empleado,id_de_periodo, fecha_domingo, 'Domingo', 'No laboral', 'No corresponde debido a su tipo de semana laboral');
+            VALUES (NEW.id_empleado,id_de_periodo_domingo, fecha_domingo, 'Domingo', 'No laboral', 'No corresponde debido a su tipo de semana laboral');
         
         ELSIF tipo_semana = 'Completa' THEN
             -- No hacer nada
@@ -588,11 +609,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION actualizar_presentismo_empleado () RETURNS TRIGGER AS $$
+DECLARE
+
+BEGIN
+	IF NEW.tipo='Falta no justificada' THEN
+		UPDATE periodo_empleado
+		SET presentismo = FALSE
+		WHERE id_periodo = NEW.id_periodo
+  		AND presentismo = TRUE;
+	END IF;
+RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER insertar_registro_jornada_hora_extra_trg
 AFTER INSERT ON asistencia_biometrica
 FOR EACH ROW
 EXECUTE FUNCTION insertar_registro_jornada_hora_extra();
-
 
 CREATE TRIGGER insertar_dias_no_laborales_desde_incidencia_trg
 AFTER INSERT ON incidencia_asistencia
@@ -608,6 +642,12 @@ CREATE TRIGGER actualizar_vigencia_fin_salario_trg
 BEFORE INSERT ON salario_base
 FOR EACH ROW
 EXECUTE FUNCTION actualizar_vigencia_fin_salario();
+
+CREATE TRIGGER actualizar_presentismo_empleado_trg
+AFTER INSERT ON incidencia_asistencia
+FOR EACH ROW
+EXECUTE FUNCTION actualizar_presentismo_empleado();
+
 
 
 
