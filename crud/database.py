@@ -3,19 +3,23 @@ from psycopg2 import pool  # Opcional para connection pooling
 import os
 from datetime import datetime, timedelta, date, time
 from contextlib import contextmanager
+from dotenv import load_dotenv
+from pathlib import Path
 
 
 # Cargar variables de entorno desde .env
 
 
 class Database:
-    # Configuración para Supabase (actualizada)
+    env_path = Path(__file__).resolve().parent.parent / ".env.test"
+    load_dotenv(dotenv_path=env_path)
+
     _config = {
-        "dbname": "database_labo_test",
-        "user": "database_tester_admin",
-        "password": "tEstLabO!239",
-        "host": "localhost",
-        "port": "5432",
+        "dbname": os.environ.get("DB_NAME"),
+        "user": os.environ.get("DB_USER"),
+        "password": os.environ.get("DB_PASSWORD"),
+        "host": os.environ.get("DB_HOST"),
+        "port": os.environ.get("DB_PORT"),
         "sslmode": "disable",
         "connect_timeout": 5,
     }

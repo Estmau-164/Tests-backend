@@ -1,3 +1,4 @@
 /.testEnv
 /.vscode
 **/__pycache__/
+.env.test
