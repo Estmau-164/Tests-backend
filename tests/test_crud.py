@@ -179,15 +179,28 @@ class TestCreacionEmpleado:
             AdminCRUD.crear_empleado(empleado)
 
     @pytest.mark.parametrize("fecha_nacimiento_invalida", ["2004-00-04","2004-02-00","2004-13-00","2004-02-30"])
-    def test_crear_empleado_fecha_nacimiento_invalida(self, datos_empleados, fecha_nacimiento_invalida):
+    def test_crear_empleado_fecha_nacimiento_mes_dia_invalido(self, datos_empleados, fecha_nacimiento_invalida):
         empleado = datos_empleados[0]
         empleado.fecha_nacimiento = fecha_nacimiento_invalida
+        with pytest.raises(Exception):
+            AdminCRUD.crear_empleado(empleado)
+
+    def test_crear_empleado_fecha_nacimiento_formato_invalido(self, datos_empleados):
+        empleado = datos_empleados[0]
+        empleado.fecha_nacimiento = "4 de febrero 2004"
         with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
     @pytest.mark.parametrize("numero_calle_invalido", ["mildoscientos cuarenta y dos","14*!"])
     def test_crear_empleado_numero_calle_invalido(self, datos_empleados, numero_calle_invalido):
         empleado = datos_empleados[0]
-        empleado.numero_calle_invalido = numero_calle_invalido
+        empleado.numero_calle= numero_calle_invalido
+        with pytest.raises(Exception):
+            AdminCRUD.crear_empleado(empleado)
+
+    @pytest.mark.parametrize("correo_invalido", ["sergioav@gmail","sergioavgmail.com","@gmail.com","sergioav@.com"])
+    def test_crear_empleado_correo_invalido(self,datos_empleados, correo_invalido):
+        empleado = datos_empleados[0]
+        empleado.correo_electronico = correo_invalido
         with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
