@@ -473,3 +473,215 @@ class AdminCRUD:
         finally:
             if conn:
                 db.return_connection(conn)
+
+
+    @staticmethod
+    def obtener_puesto_por_id_empleado(id_empleado: int) -> Optional[str]:
+        """
+        Obtiene el puesto de un empleado por su ID.
+
+        Args:
+            id_empleado: ID del empleado a buscar
+
+        Returns:
+            Nombre del puesto o None si no se encuentra.
+        """
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            query = """
+                    SELECT p.nombre
+                    FROM informacion_laboral il
+                    JOIN puesto p ON il.id_puesto = p.id_puesto
+                    WHERE il.id_empleado = %s
+                    ORDER BY il.fecha_ingreso DESC
+                    LIMIT 1
+                """
+            cur.execute(query, (id_empleado,))
+            result = cur.fetchone()
+            return result[0] if result else None
+
+        except Exception as e:
+            print(f"Error al buscar puesto del empleado: {str(e)}")
+            raise ValueError(f"No se pudo obtener el puesto: {str(e)}")
+        finally:
+            if conn:
+                db.return_connection(conn)
+
+    @staticmethod
+    def obtener_categoria_por_id_empleado(id_empleado: int) -> Optional[str]:
+        """
+        Obtiene la categoría de un empleado por su ID.
+
+        Args:
+            id_empleado: ID del empleado a buscar
+
+        Returns:
+            Nombre de la categoría o None si no se encuentra.
+        """
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            query = """
+                    SELECT c.nombre_categoria
+                    FROM informacion_laboral il
+                    JOIN categoria c ON il.id_categoria = c.id_categoria
+                    WHERE il.id_empleado = %s
+                    ORDER BY il.fecha_ingreso DESC
+                    LIMIT 1
+                """
+            cur.execute(query, (id_empleado,))
+            result = cur.fetchone()
+            return result[0] if result else None
+
+        except Exception as e:
+            print(f"Error al buscar categoría del empleado: {str(e)}")
+            raise ValueError(f"No se pudo obtener la categoría: {str(e)}")
+        finally:
+            if conn:
+                db.return_connection(conn)
+
+    @staticmethod
+    def obtener_departamento_por_id_empleado(id_empleado: int) -> Optional[Tuple[str, str]]:
+        """
+        Obtiene el departamento de un empleado por su ID.
+
+        Args:
+            id_empleado: ID del empleado a buscar
+
+        Returns:
+            Tupla con (nombre_departamento, descripcion) o None si no se encuentra.
+        """
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            query = """
+                    SELECT d.nombre, d.descripcion
+                    FROM informacion_laboral il
+                    JOIN departamento d ON il.id_departamento = d.id_departamento
+                    WHERE il.id_empleado = %s
+                    ORDER BY il.fecha_ingreso DESC
+                    LIMIT 1
+                """
+            cur.execute(query, (id_empleado,))
+            return cur.fetchone()  # Retorna directamente la tupla de resultados
+
+        except Exception as e:
+            print(f"Error al buscar departamento del empleado: {str(e)}")
+            raise ValueError(f"No se pudo obtener el departamento: {str(e)}")
+        finally:
+            if conn:
+                db.return_connection(conn)
+
+
+
+    @staticmethod
+    def actualizar_datos_personales2(id_empleado: int, telefono: str = None,
+                                    correo_electronico: str = None, calle: str = None,
+                                    numero_calle: str = None, localidad: str = None,
+                                    partido: str = None, provincia: str = None):
+        """
+        Permite a un empleado actualizar sus datos personales.
+        Solo actualiza los campos que recibe (los demás permanecen igual).
+
+        Args:
+            id_empleado: ID del empleado que realiza la actualización
+            telefono: Nuevo número de teléfono (opcional)
+            correo_electronico: Nuevo correo electrónico (opcional)
+            calle: Nueva calle (opcional)
+            numero_calle: Nuevo número de calle (opcional)
+            localidad: Nueva localidad (opcional)
+            partido: Nuevo partido (opcional)
+            provincia: Nueva provincia (opcional)
+
+        Returns:
+            El objeto Empleado actualizado
+
+        Raises:
+            ValueError: Si hay error en los datos o en la operación
+        """
+        conn = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+
+            # Construir la consulta dinámicamente basada en los parámetros proporcionados
+            updates = []
+            params = []
+
+            if telefono is not None:
+                updates.append("telefono = %s")
+                params.append(telefono)
+
+            if correo_electronico is not None:
+                # Verificar si el correo ya existe (excepto para este empleado)
+                cur.execute(
+                    "SELECT 1 FROM empleado WHERE correo_electronico = %s AND id_empleado != %s",
+                    (correo_electronico, id_empleado)
+                )
+                if cur.fetchone():
+                    raise ValueError("El correo electrónico ya está en uso por otro empleado")
+                updates.append("correo_electronico = %s")
+                params.append(correo_electronico)
+
+            if calle is not None:
+                updates.append("calle = %s")
+                params.append(calle)
+
+            if numero_calle is not None:
+                updates.append("numero_calle = %s")
+                params.append(numero_calle)
+
+            if localidad is not None:
+                updates.append("localidad = %s")
+                params.append(localidad)
+
+            if partido is not None:
+                updates.append("partido = %s")
+                params.append(partido)
+
+            if provincia is not None:
+                # Validar provincia
+                provincias_validas = ['Buenos Aires', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba',
+                                      'Corrientes', 'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa',
+                                      'La Rioja', 'Mendoza', 'Misiones', 'Neuquén', 'Río Negro',
+                                      'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe',
+                                      'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
+                                      'Ciudad Autónoma de Buenos Aires']
+                if provincia not in provincias_validas:
+                    raise ValueError(f"Provincia inválida. Opciones válidas: {provincias_validas}")
+                updates.append("provincia = %s")
+                params.append(provincia)
+
+            if not updates:
+                raise ValueError("No se proporcionaron datos para actualizar")
+
+            # Construir la consulta final
+            query = f"""
+                UPDATE empleado 
+                SET {', '.join(updates)}
+                WHERE id_empleado = %s
+                RETURNING id_empleado
+            """
+            params.append(id_empleado)
+
+            cur.execute(query, params)
+            if cur.rowcount == 0:
+                raise ValueError("No se encontró el empleado con el ID proporcionado")
+
+            conn.commit()
+            return Empleado.obtener_por_id(id_empleado)
+
+        except ValueError as e:
+            if conn:
+                conn.rollback()
+            raise e
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise ValueError(f"Error al actualizar datos: {str(e)}")
+
+        finally:
+            if conn:
+                db.return_connection(conn)
