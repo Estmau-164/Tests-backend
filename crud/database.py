@@ -11,20 +11,21 @@ from pathlib import Path
 
 
 class Database:
-    env_path = Path(__file__).resolve().parent.parent / ".env.test"
-    load_dotenv(dotenv_path=env_path)
 
-    _config = {
+    def __init__(self):
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+        load_dotenv(dotenv_path=env_path)
+
+        self._config = {
         "dbname": os.environ.get("DB_NAME"),
         "user": os.environ.get("DB_USER"),
         "password": os.environ.get("DB_PASSWORD"),
         "host": os.environ.get("DB_HOST"),
         "port": os.environ.get("DB_PORT"),
-        "sslmode": "disable",
+        "sslmode": os.environ.get("DB_SSLMODE", "disable"), #Su valor por defecto es disable
         "connect_timeout": 5,
-    }
+        }
 
-    def __init__(self):
         self.connection_pool = None
         self._initialize_pool()
 
