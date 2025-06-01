@@ -221,26 +221,25 @@ class NominaCRUD:
             if conn:
                 self.db.return_connection(conn)
 
-    def obtener_nominas_empleado(self, id_empleado: int) -> List[NominaResponse]:
+    @staticmethod
+    def obtener_nominas_empleado(id_empleado: int) -> List[NominaResponse]:
         """Devuelve todas las nóminas del empleado como Pydantic models"""
         conn = None
         try:
-            conn = self.db.get_connection()
+            conn = db.get_connection()  # <- asumimos que 'db' está definido globalmente
             cur = conn.cursor()
 
             cur.execute("""
-                SELECT * FROM recibo_sueldo 
-                WHERE id_empleado=%s
-                ORDER BY fecha_de_pago DESC
-            """, (id_empleado,))
+                    SELECT * FROM recibo_sueldo 
+                    WHERE id_empleado=%s
+                    ORDER BY fecha_de_pago DESC
+                """, (id_empleado,))
 
             columns = [desc[0] for desc in cur.description]
             return [NominaResponse(**dict(zip(columns, row))) for row in cur.fetchall()]
 
-
         finally:
-
             if conn:
-                self.db.return_connection(conn)
+                db.return_connection(conn)
 
 

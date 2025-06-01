@@ -19,7 +19,9 @@ from pydantic import BaseModel, Field
 from typing import List
 from typing import Tuple, List
 from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResponse,
-                      NominaBase, NominaListResponse, EmpleadoNominaRequest)
+                      NominaBase, NominaListResponse, EmpleadoNominaRequest, EmpleadoConsulta,
+                      EmpleadoIDRequest, EmpleadoPeriodoRequest, EmpleadoIDIntRequest,
+                      BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest)
 from fastapi import APIRouter, HTTPException
 from crud.database import db
 from fastapi.middleware.cors import CORSMiddleware
@@ -178,6 +180,15 @@ def obtener_empleado(numero_identificacion: str):
   #      return registro
    # except ValueError as e:
     #    raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/obtener-empleado")
+def obtener_empleado(data: EmpleadoConsulta):
+    empleado = AdminCRUD.obtener_detalle_empleado(data.numero_identificacion)
+    if not empleado:
+        return {"mensaje": "Empleado no encontrado"}
+    return empleado
+
+
 @app.delete("/empleados/{id_empleado}", status_code=status.HTTP_204_NO_CONTENT)
 async def borrar_empleado(
         id_empleado: int,
@@ -252,6 +263,8 @@ def actualizar_datos_empleado(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+
 # Registro manual de asistencia (admin)
 @app.post("/admin/registros/manual", tags=["Admin"])
 def registrar_asistencia_manual(
@@ -311,6 +324,56 @@ def obtener_informacion_laboral(empleado_id: int):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# --- POST Endpoints ---
+@app.post("/registros/")
+def obtener_registros_post(request: EmpleadoPeriodoRequest):
+    if request.año and request.mes:
+        registros = RegistroHorario.obtener_registros_mensuales(request.empleado_id, request.año, request.mes)
+    else:
+        registros = RegistroHorario.obtener_todos_los_registros(request.empleado_id)
+    return [r for r in registros]
+
+@app.post("/registroscompleto/")
+def obtener_registros_completo_post(request: EmpleadoIDRequest):
+    registros = RegistroHorario.obtener_todos_los_registros(request.empleado_id)
+    return [r for r in registros]
+
+@app.post("/horas/")
+def calcular_horas_post(request: HorasRequest):
+    horas = RegistroHorario.calcular_horas_mensuales(request.empleado_id, request.año, request.mes)
+    return {"horas_trabajadas": horas}
+
+@app.post("/empleados/listar")
+def listar_empleados_post():
+    try:
+        empleados = AdminCRUD.obtener_empleado()
+        return [e for e in empleados]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/empleados/buscar/")
+def buscar_empleados_post(request: BuscarEmpleadoRequest):
+    return AdminCRUD.buscar_avanzado(request.nombre, request.apellido, request.dni, request.pagina, request.por_pagina)
+
+@app.post("/empleados/informacion-laboral")
+def obtener_info_laboral_post(request: EmpleadoIDIntRequest):
+    try:
+        info = AdminCRUD.buscar_informacion_laboral_por_id_empleado(request.empleado_id)
+        if info:
+            return {
+                "departamento": info[0],
+                "puesto": info[1],
+                "turno": info[2],
+                "horario_entrada": str(info[3]),
+                "horario_salida": str(info[4]),
+                "fecha_ingreso": info[5].strftime('%Y-%m-%d'),
+                "tipo_contrato": info[6]
+            }
+        raise HTTPException(status_code=404, detail="No encontrado")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 #NOMINAS----------------------------------------------------------------------------------------
 
 # Obtener última nómina de un empleado (GET)
@@ -334,6 +397,14 @@ async def obtener_nominas_empleado(id_empleado: int):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# POST para obtener las nóminas de un empleado
+@app.post("/nominas/empleado", response_model=NominaListResponse)
+async def obtener_nominas_empleado_post(data: EmpleadoIDIntRequest):
+    try:
+        nominas = NominaCRUD.obtener_nominas_empleado(data.empleado_id)
+        return {"nominas": nominas}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/nominas/empleado/buscar", response_model=NominaListResponse)
 async def buscar_nominas_empleado(
@@ -382,5 +453,38 @@ async def calcular_nomina_endpoint(
             periodo_texto=request.periodo,
             fecha_calculo=request.fecha_calculo
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/{empleado_id}/puesto")
+def obtener_puesto_empleado(empleado_id: int):
+    try:
+        puesto = AdminCRUD.obtener_puesto_por_id_empleado(empleado_id)
+        if puesto:
+            return {"puesto": puesto}
+        raise HTTPException(status_code=404, detail="Puesto no encontrado para el empleado especificado")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/{empleado_id}/categoria")
+def obtener_categoria_empleado(empleado_id: int):
+    try:
+        categoria = AdminCRUD.obtener_categoria_por_id_empleado(empleado_id)
+        if categoria:
+            return {"categoria": categoria}
+        raise HTTPException(status_code=404, detail="Categoría no encontrada para el empleado especificado")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/{empleado_id}/departamento")
+def obtener_departamento_empleado(empleado_id: int):
+    try:
+        departamento_info = AdminCRUD.obtener_departamento_por_id_empleado(empleado_id)
+        if departamento_info:
+            return {
+                "departamento": departamento_info[0],
+                "descripcion": departamento_info[1] if departamento_info[1] else "Sin descripción"
+            }
+        raise HTTPException(status_code=404, detail="Departamento no encontrado para el empleado especificado")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
