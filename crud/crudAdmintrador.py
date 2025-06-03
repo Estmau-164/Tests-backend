@@ -574,7 +574,6 @@ class AdminCRUD:
                 db.return_connection(conn)
 
 
-
     @staticmethod
     def actualizar_datos_personales2(id_empleado: int, telefono: str = None,
                                     correo_electronico: str = None, calle: str = None,
@@ -668,20 +667,14 @@ class AdminCRUD:
             cur.execute(query, params)
             if cur.rowcount == 0:
                 raise ValueError("No se encontró el empleado con el ID proporcionado")
-
+            print(f"[DEBUG] Tipo de conn: {type(conn)}")
             conn.commit()
             return Empleado.obtener_por_id(id_empleado)
-
-        except ValueError as e:
-            if conn:
-                conn.rollback()
-            raise e
-
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            raise ValueError(f"Error al actualizar datos: {str(e)}")
-
         finally:
             if conn:
-                db.return_connection(conn)
+                conn.close()
+
+
+
+
+
