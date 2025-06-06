@@ -1,47 +1,75 @@
 import re
 
 
-def nombre_valido(nombre):
+def validar_nombre(nombre):
     patron = r"^[A-Za-záéíóúÁÉÍÓÚñÑ\s]+$"  # Permite letras, con acento y espacios
-    return bool(re.match(patron, nombre))
+    nombre_valido = bool(re.match(patron, nombre))
+    if not nombre_valido:
+        raise ValueError(f"Nombre invalido: '{nombre}'. Deberian ser solo letras")
+    return
 
 
-def apellido_valido(apellido):
+def validar_apellido(apellido):
     patron = r"^[A-Za-záéíóúÁÉÍÓÚñÑ\s]+$"  # Permite letras, con acento y espacios
-    return bool(re.match(patron, apellido))
+    apellido_valido = bool(re.match(patron, apellido))
+    if not apellido_valido:
+        raise ValueError(f"Apellido invalido: '{apellido}. Deberian ser solo letras")
+    return
 
 
-def correo_electronico_valido(correo_electronico):
+def validar_correo_electronico(correo_electronico):
     patron = r"^[\w\.-]+@[\w\.-]+\.\w+$"  # Solo el formato de mail
-    return bool(re.match(patron, correo_electronico))
+    correo_valido = bool(re.match(patron, correo_electronico))
+    if not correo_valido:
+        raise ValueError(
+            f"Correo electronico invalido: '{correo_electronico}'. El formato no es correcto"
+        )
+    return
 
 
-def telefono_valido(telefono):
+def validar_telefono(telefono):
     patron = r"^\+?[\d\s\-()]$"  # Puede iniciar con + y se permiten numeros, espacios, guiones y parentesis
-    return bool(re.match(patron, telefono))
+    telefono_valido = bool(re.match(patron, telefono))
+    if not telefono_valido:
+        raise ValueError(f"Telefono invalido: '{telefono}'")
+    return
 
 
-def calle_valida(calle):
+def validar_calle(calle):
     patron = r"^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9\s\.,'\-]+$"  # Se permiten letras, con acento, numeros, espacios y ciertos caracteres especiales
-    return bool(re.match(patron, calle))
+    calle_valida = bool(re.match(patron, calle))
+    if not calle_valida:
+        raise ValueError(f"Calle invalida: '{calle}'")
+    return
 
 
-def numero_calle_valido(numero_calle):
+def validar_numero_calle(numero_calle):
     patron = r"^\d{1,5}$"  # Se permiten solo numeros
-    return bool(re.match(patron, numero_calle))
+    numero_calle_valido = bool(re.match(patron, numero_calle))
+    if not numero_calle_valido:
+        raise ValueError(
+            f"Numero de calle invalido: '{numero_calle}'. Solo se permiten caracteres numericos"
+        )
+    return
 
 
-def localidad_valida(localidad):
+def validar_localidad(localidad):
     patron = r"^[A-Za-zÁÉÍÓÚáéíóúÑñ0-9\s\.,'\-]+$"  # Se permiten letras, con acento, numeros, espacios y ciertos caracteres especiales
-    return bool(re.match(patron, localidad))
+    localidad_valida = bool(re.match(patron, localidad))
+    if not localidad_valida:
+        raise ValueError(f"Localidad invalida: '{localidad}'")
+    return
 
 
-def partido_valido(partido):
+def validar_partido(partido):
     patron = r"^[A-Za-zÁÉÍÓÚáéíóúÑñ\s\.]+$"
-    return bool(re.match(patron, partido))
+    partido_valido = bool(re.match(patron, partido))
+    if not partido_valido:
+        raise ValueError(f"Partido invalido: '{partido}'")
+    return
 
 
-def provincia_valida(provincia):
+def validar_provincia(provincia):
     provincias_validas = [
         "Buenos Aires",
         "Catamarca",
@@ -69,11 +97,11 @@ def provincia_valida(provincia):
         "Ciudad Autónoma de Buenos Aires",
     ]
     if provincia not in provincias_validas:
-        return False
-    return True
+        raise ValueError(f"Provincia inválida. Opciones válidas: {provincias_validas}")
+    return
 
 
-def genero_valido(genero):
+def validar_genero(genero):
     generos_validos = [
         "Masculino",
         "Femenino",
@@ -82,11 +110,11 @@ def genero_valido(genero):
         "Otro",
     ]
     if genero not in generos_validos:
-        return False
-    return True
+        raise ValueError(f"Género inválido. Opciones válidas: {generos_validos}")
+    return
 
 
-def pais_nacimiento_valido(pais_nacimiento):
+def validar_pais_nacimiento(pais_nacimiento):
     nacionalidades_validas = [
         "Argentina",
         "Brasil",
@@ -101,20 +129,34 @@ def pais_nacimiento_valido(pais_nacimiento):
         "México",
     ]
     if pais_nacimiento not in nacionalidades_validas:
-        return False
-    return True
+        raise ValueError(
+            f"Nacionalidad inválida. Opciones válidas: {nacionalidades_validas}"
+        )
+    return
 
 
-def tipo_identificacion_valido(tipo_identificacion):
+def validar_tipo_identificacion(tipo_identificacion):
     tipos_identificacion_validos = ["DNI", "Pasaporte", "Cédula"]
     if tipo_identificacion not in tipos_identificacion_validos:
-        return False
-    return True
+        raise ValueError(
+            f"Tipo de identificación inválido. Opciones válidas: {tipos_identificacion_validos}"
+        )
+    return
 
 
-def numero_identificacion_valido(tipo_identificacion, numero_identificacion):
-    if(tipo_identificacion == "DNI" or tipo_identificacion == "Cédula"):
-        return (len(numero_identificacion) >= 7 and numero_identificacion.isdigit())
-    elif(tipo_identificacion == "Pasaporte"):
-        return (len(numero_identificacion) >= 6 and numero_identificacion.isalnum())
-    return False
+def validar_numero_identificacion(tipo_identificacion, numero_identificacion):
+    numero_identificacion_valido = False
+    if tipo_identificacion == "DNI" or tipo_identificacion == "Cédula":
+        numero_identificacion_valido = (
+            len(numero_identificacion) >= 7 and numero_identificacion.isdigit()
+        )
+    elif tipo_identificacion == "Pasaporte":
+        numero_identificacion_valido = (
+            len(numero_identificacion) >= 6 and numero_identificacion.isalnum()
+        )
+
+    if not numero_identificacion_valido:
+        raise ValueError(
+            f"El formato del numero de identificacion para '{tipo_identificacion}' no es valida"
+        )
+    return
