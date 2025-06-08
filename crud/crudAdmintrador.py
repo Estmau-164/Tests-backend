@@ -6,6 +6,10 @@ from .crudEmpleado import Empleado
 from typing import Optional
 from typing import Tuple, List
 from api.schemas import EmpleadoResponse
+import cloudinary
+import cloudinary.uploader
+from cloudinary.uploader import upload as cloudinary_upload
+import io
 
 
 class AdminCRUD:
@@ -157,7 +161,7 @@ class AdminCRUD:
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT id_empleado, numero_identificacion, nombre, apellido, correo_electronico, telefono
+                SELECT id_empleado, numero_identificacion, nombre, apellido, correo_electronico, telefono, imagen_perfil_url
                 FROM empleado
                 ORDER BY apellido, nombre
                 """
@@ -573,6 +577,39 @@ class AdminCRUD:
             if conn:
                 db.return_connection(conn)
 
+    @staticmethod
+    def obtener_rol_por_id_empleado(id_empleado: int) -> Optional[str]:
+        """
+        Obtiene el rol de un empleado por su ID.
+
+        Args:
+            id_empleado: ID del empleado a buscar
+
+        Returns:
+            Nombre del rol o None si no se encuentra.
+        """
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            query = """
+                    SELECT p.nombre
+                    FROM informacion_laboral il
+                    JOIN rol p ON il.id_rol = p.id_rol
+                    WHERE il.id_empleado = %s
+                    ORDER BY il.fecha_ingreso DESC
+                    LIMIT 1
+                """
+            cur.execute(query, (id_empleado,))
+            result = cur.fetchone()
+            return result[0] if result else None
+
+        except Exception as e:
+            print(f"Error al buscar rol del empleado: {str(e)}")
+            raise ValueError(f"No se pudo obtener el rol: {str(e)}")
+        finally:
+            if conn:
+                db.return_connection(conn)
+
 
     @staticmethod
     def actualizar_datos_personales2(id_empleado: int, telefono: str = None,
@@ -676,7 +713,38 @@ class AdminCRUD:
 
 
 
+    @staticmethod
+    def actualizar_imagen_perfil(image_bytes: bytes, usuario_id: int):
+        """
+        Sube una imagen a Cloudinary y actualiza la URL en la base de datos para el usuario indicado.
 
+        Args:
+            image_bytes: El contenido de la imagen en bytes
+            usuario_id: ID del empleado a actualizar
 
+        Returns:
+            URL segura de la imagen subida
+        """
+        conn = None
+        try:
+            # Subir a Cloudinary
+            result = cloudinary.uploader.upload(io.BytesIO(image_bytes), folder="perfiles")
+            image_url = result["secure_url"]
 
+            # Guardar en base de datos
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE empleado SET imagen_perfil_url = %s WHERE id_empleado = %s",
+                (image_url, usuario_id)
+            )
+            conn.commit()
+            return image_url
+
+        except Exception as e:
+            raise Exception(f"Error al subir imagen: {e}")
+
+        finally:
+            if conn:
+                conn.close()
 
