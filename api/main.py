@@ -594,41 +594,50 @@ def obtener_departamento_empleado(empleado_id: int):
 
 @app.post("/login", response_model=LoginResponse)
 def login(request: LoginRequest):
-    usuario = AdminCRUD.obtener_usuario_por_username(request.username)
+    #  Buscar usuario
+    usuario = Usuario.obtener_usuario_por_username(request.username)
 
-    if not usuario or not verificar_password(request.password, usuario.password_hash):
+    if not usuario or not Usuario.verificar_password(request.password, usuario.contrasena):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
+    # Verificar si el usuario está activo
+    if not usuario.esta_activo:
+        raise HTTPException(status_code=403, detail="Usuario inactivo")
+
     # Obtener el id_rol desde empleado
+    id_rol = AdminCRUD.obtener_id_rol_por_id_empleado(usuario.id_empleado)
+    if id_rol is None:
+        raise HTTPException(status_code=404, detail="Rol no asignado al empleado")
 
-    id_rol = AdminCRUD.obtener_rol_por_id_empleado(usuario.id_empleado)
+    #  Obtener permisos desde tabla rol
+    permisos = Usuario.obtener_permisos_por_id_rol(id_rol)
 
-    # Obtener permisos desde tabla rol
-    permisos = AdminCRUD.obtener_permisos_por_id_rol(id_rol)
-
+    # Crear token
     token_data = {
-        "sub": usuario.username,
+        "sub": usuario.nombre_usuario,
         "id_empleado": usuario.id_empleado,
         "id_rol": id_rol,
-        "permisos": permisos
+        "permisos": permisos.model_dump()
     }
 
     token = crear_token(token_data)
 
+    # Devolver token y permisos
     return {
         "access_token": token,
         "permisos": permisos,
-        "rol": id_rol
+        "rol": str(usuario.id_rol)
     }
+
 
 @app.post("/crear-usuario/")
 def crear_usuario(request: CrearUsuarioRequest):
     try:
-        id_usuario = AdminCRUD.crear_usuario(
+        id_usuario = Usuario.crear_usuario(
             id_empleado=request.id_empleado,
             id_rol=request.id_rol,
             nombre_usuario=request.nombre_usuario,
-            contraseña=request.contraseña,
+            contrasena=request.contrasena,
             motivo=request.motivo
         )
         return {"mensaje": "Usuario creado correctamente", "id_usuario": id_usuario}

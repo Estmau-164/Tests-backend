@@ -594,7 +594,7 @@ class AdminCRUD:
             query = """
                     SELECT p.nombre
                     FROM informacion_laboral il
-                    JOIN rol p ON il.id_rol = p.id_rol
+                    JOIN rol p ON p.id_rol = p.id_rol
                     WHERE il.id_empleado = %s
                     ORDER BY il.fecha_ingreso DESC
                     LIMIT 1
@@ -609,6 +609,14 @@ class AdminCRUD:
         finally:
             if conn:
                 db.return_connection(conn)
+
+    @staticmethod
+    def obtener_id_rol_por_id_empleado(id_empleado: int):
+        conn = db.get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id_rol FROM usuario WHERE id_empleado = %s", (id_empleado,))
+        result = cur.fetchone()
+        return result[0] if result else None
 
 
     @staticmethod

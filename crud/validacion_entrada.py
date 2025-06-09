@@ -159,7 +159,10 @@ def validar_numero_identificacion(tipo_identificacion: str, numero_identificacio
         )
     return
 
+
 def validar_estado_civil(estado_civil: str):
     estados_civiles_validos = ["Soltero/a", "Casado/a", "Divorciado/a", "Viudo/a"]
     if estado_civil not in estados_civiles_validos:
-        raise ValueError(f"Estado civil invalido. Opciones validas: {estados_civiles_validos}")
+        raise ValueError(
+            f"Estado civil invalido. Opciones validas: {estados_civiles_validos}"
+        )

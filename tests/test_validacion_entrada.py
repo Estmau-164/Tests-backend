@@ -88,51 +88,65 @@ def test_validar_numero_calle_invalido(calle):
     with pytest.raises(Exception):
         validacion_entrada.validar_numero_calle(calle)
 
+
 @pytest.mark.parametrize("localidad", ["Virreyes", "José C. Paz"])
 def test_validar_localidad_valida(localidad):
     validacion_entrada.validar_localidad(localidad)
 
-@pytest.mark.parametrize("localidad", ["La Plata, Buenos Aires", "Córdoba!", "José C. Paz!"])
+
+@pytest.mark.parametrize(
+    "localidad", ["La Plata, Buenos Aires", "Córdoba!", "José C. Paz!"]
+)
 def test_validar_localidad_invalida(localidad):
     with pytest.raises(Exception):
         validacion_entrada.validar_localidad(localidad)
 
+
 def test_validar_partido_valido():
     validacion_entrada.validar_partido("Malvinas Argentinas")
+
 
 def test_validar_partido_invalido():
     with pytest.raises(Exception):
         validacion_entrada.validar_partido("M4lvinas Arg*n!nas")
 
+
 def test_validar_provincia_valida():
     validacion_entrada.validar_provincia("Buenos Aires")
     validacion_entrada.validar_provincia("Jujuy")
 
+
 def test_validar_provincia_invalida():
     with pytest.raises(Exception):
         validacion_entrada.validar_provincia("Antartida Argentina")
+
 
 def test_validar_pais_nacimiento_valido():
     validacion_entrada.validar_pais_nacimiento("Argentina")
     validacion_entrada.validar_pais_nacimiento("Uruguay")
     validacion_entrada.validar_pais_nacimiento("Chile")
 
+
 def test_validar_pais_nacimiento_invalido():
     with pytest.raises(Exception):
         validacion_entrada.validar_pais_nacimiento("Wakanda")
+
 
 def test_validar_genero_valido():
     validacion_entrada.validar_genero("Femenino")
     validacion_entrada.validar_genero("Masculino")
     validacion_entrada.validar_genero("No binario")
 
+
 def test_validar_genero_invalido():
     with pytest.raises(Exception):
         validacion_entrada.validar_genero("Plantae")
 
+
 def test_validar_estado_civil_valido():
     validacion_entrada.validar_estado_civil("Soltero/a")
     validacion_entrada.validar_estado_civil("Casado/a")
+
 
 def test_validar_estado_civil_invalido():
     with pytest.raises(Exception):
