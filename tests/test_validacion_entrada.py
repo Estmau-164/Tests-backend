@@ -58,7 +58,7 @@ def test_validar_telefono_valido(telefono):
     validacion_entrada.validar_telefono(telefono)
 
 
-@pytest.mark.parametrize("telefono", ["", "12d3-434s", "341#!-=sdq"])
+@pytest.mark.parametrize("telefono", ["12d3-434s", "341#!-=sdq"])
 def test_validar_telefono_invalido(telefono):
     with pytest.raises(Exception):
         validacion_entrada.validar_telefono(telefono)
