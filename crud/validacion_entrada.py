@@ -1,5 +1,5 @@
 import re
-
+from api.schemas import EmpleadoBase
 
 def validar_nombre(nombre: str):
     patron = r"^[A-Za-záéíóúÁÉÍÓÚñÑ\s]+$"  # Permite letras, con acento y espacios
@@ -166,3 +166,19 @@ def validar_estado_civil(estado_civil: str):
         raise ValueError(
             f"Estado civil invalido. Opciones validas: {estados_civiles_validos}"
         )
+
+def validar_datos_empleado(empleado: EmpleadoBase):
+    validar_nombre(empleado.nombre)
+    validar_apellido(empleado.apellido)
+    validar_tipo_identificacion(empleado.tipo_identificacion)
+    validar_numero_identificacion(empleado.tipo_identificacion, empleado.numero_identificacion)
+    validar_correo_electronico(empleado.correo_electronico)
+    validar_telefono(empleado.telefono)
+    validar_calle(empleado.calle)
+    validar_numero_calle(empleado.numero_calle)
+    validar_localidad(empleado.localidad)
+    validar_partido(empleado.partido)
+    validar_provincia(empleado.provincia)
+    validar_pais_nacimiento(empleado.pais_nacimiento)
+    validar_genero(empleado.genero)
+    validar_estado_civil(empleado.estado_civil)
