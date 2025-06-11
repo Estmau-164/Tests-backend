@@ -1,6 +1,7 @@
-from crud.crudAdmintrador import AdminCRUD
-from api.schemas import EmpleadoBase
 import pytest
+from api.schemas import EmpleadoBase
+from crud.crudAdmintrador import AdminCRUD
+from crud.crudEmpleado import Empleado
 
 
 @pytest.fixture
@@ -165,21 +166,30 @@ class TestCreacionEmpleado:
         with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
-    @pytest.mark.parametrize("numero_dni_invalido", ["44thf68a","44621*!?"])
-    def test_crear_empleado_numero_identificacion_dni_invalido(self,datos_empleados,numero_dni_invalido):
+    @pytest.mark.parametrize("numero_dni_invalido", ["44thf68a", "44621*!?"])
+    def test_crear_empleado_numero_identificacion_dni_invalido(
+        self, datos_empleados, numero_dni_invalido
+    ):
         empleado = datos_empleados[0]
         empleado.numero_identificacion = numero_dni_invalido
         with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
-    def test_crear_empleado_numero_identificacion_pasaporte_invalido(self, datos_empleados):
+    def test_crear_empleado_numero_identificacion_pasaporte_invalido(
+        self, datos_empleados
+    ):
         empleado = datos_empleados[1]
         empleado.numero_identificacion = "AF*41!84?"
         with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
-    @pytest.mark.parametrize("fecha_nacimiento_invalida", ["2004-00-04","2004-02-00","2004-13-00","2004-02-30"])
-    def test_crear_empleado_fecha_nacimiento_mes_dia_invalido(self, datos_empleados, fecha_nacimiento_invalida):
+    @pytest.mark.parametrize(
+        "fecha_nacimiento_invalida",
+        ["2004-00-04", "2004-02-00", "2004-13-00", "2004-02-30"],
+    )
+    def test_crear_empleado_fecha_nacimiento_mes_dia_invalido(
+        self, datos_empleados, fecha_nacimiento_invalida
+    ):
         empleado = datos_empleados[0]
         empleado.fecha_nacimiento = fecha_nacimiento_invalida
         with pytest.raises(Exception):
@@ -191,16 +201,61 @@ class TestCreacionEmpleado:
         with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
-    @pytest.mark.parametrize("numero_calle_invalido", ["mildoscientos cuarenta y dos","14*!"])
-    def test_crear_empleado_numero_calle_invalido(self, datos_empleados, numero_calle_invalido):
+    @pytest.mark.parametrize(
+        "numero_calle_invalido", ["mildoscientos cuarenta y dos", "14*!"]
+    )
+    def test_crear_empleado_numero_calle_invalido(
+        self, datos_empleados, numero_calle_invalido
+    ):
         empleado = datos_empleados[0]
-        empleado.numero_calle= numero_calle_invalido
+        empleado.numero_calle = numero_calle_invalido
         with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
 
-    @pytest.mark.parametrize("correo_invalido", ["sergioav@gmail","sergioavgmail.com","@gmail.com","sergioav@.com"])
-    def test_crear_empleado_correo_invalido(self,datos_empleados, correo_invalido):
+    @pytest.mark.parametrize(
+        "correo_invalido",
+        ["sergioav@gmail", "sergioavgmail.com", "@gmail.com", "sergioav@.com"],
+    )
+    def test_crear_empleado_correo_invalido(self, datos_empleados, correo_invalido):
         empleado = datos_empleados[0]
         empleado.correo_electronico = correo_invalido
         with pytest.raises(Exception):
             AdminCRUD.crear_empleado(empleado)
+
+
+@pytest.mark.usefixtures("setup_schema")
+class TestEliminarEmpleado:
+
+    def test_eliminar_empleado_existente(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        assert Empleado.borrar_por_id(nuevo_empleado["id_empleado"]) == True
+
+    def test_eliminar_empleado_inexistente(self):
+        assert Empleado.borrar_por_id(1) == False
+
+
+@pytest.mark.usefixtures("setup_schema")
+class TestObtenerEmpleado:
+    def test_obtener_empleado_existente_por_id(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        empleado_obtenido = Empleado.obtener_por_id(nuevo_empleado["id_empleado"])
+        assert (
+            empleado_obtenido.numero_identificacion
+            == nuevo_empleado["numero_identificacion"]
+        )
+
+    def test_obtener_empleado_inexistente_por_id(self):
+        assert Empleado.obtener_por_id(1) == None
+
+    def test_obtener_empleado_existente_numero_identificacion(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        empleado_obtenido = Empleado.obtener_por_numero_identificacion(
+            nuevo_empleado["numero_identificacion"]
+        )
+        assert (
+            empleado_obtenido.numero_identificacion
+            == nuevo_empleado["numero_identificacion"]
+        )
+
+    def test_obtener_empleado_inexistente_numero_identificacion(self):
+        assert Empleado.obtener_por_numero_identificacion("58521234") == None

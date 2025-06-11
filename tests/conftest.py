@@ -1,6 +1,7 @@
 import pytest
 from crud.database import db
-from crud import crudAdmintrador
+from crud.crudAdmintrador import AdminCRUD
+from api.schemas import EmpleadoBase
 import os
 
 # Limpia la base de datos antes de cada test
