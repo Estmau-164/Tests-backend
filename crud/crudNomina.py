@@ -3,6 +3,9 @@ from datetime import datetime, timedelta, date
 from typing import Optional, List
 from api.schemas import NominaBase, NominaResponse
 from .database import db
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+import os
 
 class NominaCRUD:
     def __init__(self):
@@ -199,12 +202,12 @@ class NominaCRUD:
                 if conn:
                     self.db.return_connection(conn)
 
-
-    def obtener_nomina(self, id_nomina: int) -> Optional[NominaResponse]:
+    @staticmethod
+    def obtener_nomina(id_nomina: int) -> Optional[NominaResponse]:
         """Devuelve una nómina como Pydantic model"""
         conn = None
         try:
-            conn = self.db.get_connection()
+            conn = db.get_connection()
             cur = conn.cursor()
 
             cur.execute("SELECT * FROM recibo_sueldo WHERE id_nomina=%s", (id_nomina,))
@@ -219,7 +222,7 @@ class NominaCRUD:
 
         finally:
             if conn:
-                self.db.return_connection(conn)
+                db.return_connection(conn)
 
     @staticmethod
     def obtener_nominas_empleado(id_empleado: int) -> List[NominaResponse]:
@@ -242,4 +245,41 @@ class NominaCRUD:
             if conn:
                 db.return_connection(conn)
 
+    def generar_recibo_pdf(
+            id_nomina: int,
+            nombre_empleado: str,
+            periodo: str,
+            fecha_de_pago: str,
+            salario_base: float,
+            bono_presentismo: float,
+            horas_extra: float,
+            descuento_jubilacion: float,
+            descuento_obra_social: float,
+            sueldo_neto: float
+    ) -> str:
+        # Ruta donde se guarda el archivo
+        filename = f"./pdfs/recibo_{id_nomina}.pdf"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+        # Crear el canvas
+        c = canvas.Canvas(filename, pagesize=A4)
+        width, height = A4
+
+        # Escribir el contenido
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(200, height - 50, "Recibo de Sueldo")
+
+        c.setFont("Helvetica", 12)
+        c.drawString(50, height - 100, f"Empleado: {nombre_empleado}")
+        c.drawString(50, height - 120, f"Período: {periodo}")
+        c.drawString(50, height - 140, f"Fecha de pago: {fecha_de_pago}")
+        c.drawString(50, height - 160, f"Salario base: ${salario_base:.2f}")
+        c.drawString(50, height - 180, f"Bono por presentismo: ${bono_presentismo:.2f}")
+        c.drawString(50, height - 200, f"Horas extra: ${horas_extra:.2f}")
+        c.drawString(50, height - 220, f"Descuento jubilación: ${descuento_jubilacion:.2f}")
+        c.drawString(50, height - 240, f"Obra social: ${descuento_obra_social:.2f}")
+        c.drawString(50, height - 280, f"SUELDO NETO: ${sueldo_neto:.2f}")
+
+        c.save()
+        return filename
 

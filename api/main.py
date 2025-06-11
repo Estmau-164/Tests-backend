@@ -33,6 +33,7 @@ from fastapi import HTTPException, status
 import cloudinary
 import cloudinary.uploader
 from fastapi import UploadFile, File, Form
+from fastapi.responses import FileResponse
 
 
 
@@ -589,6 +590,35 @@ def obtener_departamento_empleado(empleado_id: int):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@app.get("/descargar-recibo/{id_nomina}")
+def descargar_recibo(id_nomina: int):
+    nomina = NominaCRUD.obtener_nomina(id_nomina)
+    if not nomina:
+        raise HTTPException(status_code=404, detail="Nómina no encontrada")
+
+    path_pdf = f"./pdfs/recibo_{id_nomina}.pdf"
+    if not os.path.exists(path_pdf):
+        # Llamada explícita sin usar dict()
+        path_pdf = NominaCRUD.generar_recibo_pdf(
+            id_nomina=id_nomina,
+            nombre_empleado=nomina.nombre_empleado,
+            periodo=nomina.periodo,
+            fecha_de_pago=str(nomina.fecha_de_pago),
+            salario_base=nomina.salario_base,
+            bono_presentismo=nomina.bono_presentismo,
+            horas_extra=nomina.horas_extra,
+            descuento_jubilacion=nomina.descuento_jubilacion,
+            descuento_obra_social=nomina.descuento_obra_social,
+            sueldo_neto=nomina.sueldo_neto
+        )
+
+    return FileResponse(
+        path_pdf,
+        media_type='application/pdf',
+        filename=f"recibo_{id_nomina}.pdf"
+    )
+
 #user
 # --------------------------------------------------------------
 
@@ -611,6 +641,7 @@ def login(request: LoginRequest):
 
     #  Obtener permisos desde tabla rol
     permisos = Usuario.obtener_permisos_por_id_rol(id_rol)
+    numero_identificacion = AdminCRUD.obtener_numero_identificacion(usuario.id_empleado)
 
     # Crear token
     token_data = {
@@ -626,7 +657,10 @@ def login(request: LoginRequest):
     return {
         "access_token": token,
         "permisos": permisos,
-        "rol": str(usuario.id_rol)
+        "rol": str(usuario.id_rol),
+        "id_empleado": usuario.id_empleado,
+        "numero_identificacion": numero_identificacion
+
     }
 
 
