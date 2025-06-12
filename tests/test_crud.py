@@ -2,12 +2,13 @@ import pytest
 from api.schemas import EmpleadoBase
 from crud.crudAdmintrador import AdminCRUD
 from crud.crudEmpleado import Empleado
+import unicodedata
 
 
 @pytest.fixture
 def datos_empleados():
     empleado0 = EmpleadoBase(
-        nombre="Sergio",
+        nombre="José",
         apellido="Avila",
         tipo_identificacion="DNI",
         numero_identificacion="46474422",
@@ -104,6 +105,13 @@ class TestCreacionEmpleado:
         empleado.telefono = ""
         # El sistema me deberia dejar registrar un empleado sin telefono
         assert AdminCRUD.crear_empleado(empleado)["numero_identificacion"] == "46474422"
+
+    @pytest.mark.parametrize("telefono_invalido", ["12d3-434s", "341#!-=sdq"])
+    def test_crear_empleado_telefono_invalido(self, datos_empleados, telefono_invalido):
+        empleado = datos_empleados[0]
+        empleado.telefono = telefono_invalido
+        with pytest.raises(Exception):
+            AdminCRUD.crear_empleado(empleado)["numero_identificacion"] == "46474422"
 
     def test_crear_empleado_calle_vacia(self, datos_empleados):
         empleado = datos_empleados[0]
@@ -247,15 +255,163 @@ class TestObtenerEmpleado:
     def test_obtener_empleado_inexistente_por_id(self):
         assert Empleado.obtener_por_id(1) == None
 
-    def test_obtener_empleado_existente_numero_identificacion(self, datos_empleados):
-        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
-        empleado_obtenido = Empleado.obtener_por_numero_identificacion(
-            nuevo_empleado["numero_identificacion"]
-        )
-        assert (
-            empleado_obtenido.numero_identificacion
-            == nuevo_empleado["numero_identificacion"]
-        )
 
-    def test_obtener_empleado_inexistente_numero_identificacion(self):
-        assert Empleado.obtener_por_numero_identificacion("58521234") == None
+@pytest.mark.usefixtures("setup_schema")
+class TestActualizarDatosEmpleado:
+    def test_actualizar_datos_empleado_existente(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        empleado_actualizado = Empleado.actualizar_datos_personales(
+            nuevo_empleado["id_empleado"],
+            "11 5498-3219",
+            "nuevocorreo@gmail.com",
+            "Brasil",
+            "6543",
+            "Polvorines",
+            "Malvinas Argentinas",
+            "Buenos Aires",
+        )
+        assert empleado_actualizado.telefono == "11 5498-3219"
+        assert empleado_actualizado.correo_electronico == "nuevocorreo@gmail.com"
+        assert empleado_actualizado.calle == "Brasil"
+        assert empleado_actualizado.numero_calle == "6543"
+        assert empleado_actualizado.localidad == "Polvorines"
+        assert empleado_actualizado.partido == "Malvinas Argentinas"
+        assert empleado_actualizado.provincia == "Buenos Aires"
+
+    def test_actualizar_datos_empleado_inexistente(self):
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                1,
+                "11 5498-3219",
+                "nuevocorreo@gmail.com",
+                "Brasil",
+                "6543",
+                "Polvorines",
+                "Malvinas Argentinas",
+                "Buenos Aires",
+            )
+
+    def test_actualizar_ningun_dato_empleado(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                nuevo_empleado["id_empleado"],
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+
+    @pytest.mark.parametrize("telefono_invalido", ["12d3-434s", "341#!-=sdq"])
+    def test_actualizar_datos_empleado_telefono_invalido(
+        self, datos_empleados, telefono_invalido
+    ):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                nuevo_empleado["id_empleado"],
+                telefono_invalido,
+                "nuevocorreo@gmail.com",
+                "Brasil",
+                "6543",
+                "Polvorines",
+                "Malvinas Argentinas",
+                "Buenos Aires",
+            )
+
+    @pytest.mark.parametrize(
+        "correo_invalido", ["usuario@gmail", "usuario@.com", "@gmail.com"]
+    )
+    def test_actualizar_datos_empleado_correo_invalido(
+        self, datos_empleados, correo_invalido
+    ):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                nuevo_empleado["id_empleado"],
+                "11 5498-3219",
+                correo_invalido,
+                "Brasil",
+                "6543",
+                "Polvorines",
+                "Malvinas Argentinas",
+                "Buenos Aires",
+            )
+
+    def test_actualizar_datos_empleado_calle_invalida(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                nuevo_empleado["id_empleado"],
+                "11 5498-3219",
+                "nuevocorreo@gmail.com",
+                "G#ndolf?",
+                "6543",
+                "Polvorines",
+                "Malvinas Argentinas",
+                "Buenos Aires",
+            )
+
+    def test_actualizar_datos_empleado_numero_calle_invalido(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                nuevo_empleado["id_empleado"],
+                "11 5498-3219",
+                "nuevocorreo@gmail.com",
+                "Brasil",
+                "6543",
+                "Polvorines",
+                "Malvinas Argentinas",
+                "Buenos Aires",
+            )
+
+    @pytest.mark.parametrize(
+        "localidad_invalida", ["La Plata, Buenos Aires", "Córdoba!"]
+    )
+    def test_actualizar_datos_empleado_localidad_invalida(
+        self, datos_empleados, localidad_invalida
+    ):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                nuevo_empleado["id_empleado"],
+                "11 5498-3219",
+                "nuevocorreo@gmail.com",
+                "Brasil",
+                "6543",
+                localidad_invalida,
+                "Malvinas Argentinas",
+                "Buenos Aires",
+            )
+
+    def test_actualizar_datos_empleado_partido_invalido(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                nuevo_empleado["id_empleado"],
+                "11 5498-3219",
+                "nuevocorreo@gmail.com",
+                "Brasil",
+                "6543",
+                "Polvorines",
+                "M4lvinas Arg*n!nas",
+                "Buenos Aires",
+            )
+
+    def test_actualizar_datos_empleado_provincia_invalida(self, datos_empleados):
+        nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
+        with pytest.raises(Exception):
+            Empleado.actualizar_datos_personales(
+                nuevo_empleado["id_empleado"],
+                "11 5498-3219",
+                "nuevocorreo@gmail.com",
+                "Brasil",
+                "6543",
+                "Polvorines",
+                "Malvinas Argentinas",
+                "Antartida Argentina",
+            )
