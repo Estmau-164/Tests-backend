@@ -83,10 +83,10 @@ def test_validar_numero_calle_valido():
     validacion_entrada.validar_numero_calle("10568")
 
 
-@pytest.mark.parametrize("calle", ["456a", "45!="])
-def test_validar_numero_calle_invalido(calle):
+@pytest.mark.parametrize("numero_calle", ["456a", "45!="])
+def test_validar_numero_calle_invalido(numero_calle):
     with pytest.raises(Exception):
-        validacion_entrada.validar_numero_calle(calle)
+        validacion_entrada.validar_numero_calle(numero_calle)
 
 
 @pytest.mark.parametrize("localidad", ["Virreyes", "José C. Paz"])
