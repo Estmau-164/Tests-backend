@@ -25,7 +25,7 @@ from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResp
                       NominaBase, NominaListResponse, EmpleadoNominaRequest, EmpleadoConsulta,
                       EmpleadoIDRequest, EmpleadoPeriodoRequest, EmpleadoIDIntRequest,
                       BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest, LoginResponse, LoginResponse,
-                      LoginRequest, RegistroUpdate, CrearUsuarioRequest)
+                      LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput)
 from fastapi import APIRouter, HTTPException
 from crud.database import db
 from fastapi.middleware.cors import CORSMiddleware
@@ -150,28 +150,23 @@ def crear_empleado(empleado: EmpleadoBase):
 """
 
 
-@app.post("/empleados/", response_model=EmpleadoBase)
-async def crear_empleado(empleado: EmpleadoBase):
+@app.post("/crear-empleado/")
+def crear_empleado(request: EmpleadoBase):
     try:
-        print(f"[API] Inicio creación empleado - Datos recibidos:")
-        print(f"Nombre: {empleado.nombre}")
-        print(f"Apellido: {empleado.apellido}")
-        # Agrega logs para otros campos importantes
+        id_empleado = AdminCRUD.crear_empleado(request)
 
-        empleado_creado = AdminCRUD.crear_empleado(empleado)
-        print("[API] Empleado creado exitosamente")
-        return empleado_creado
+        return {
+            "mensaje": "Empleado creado correctamente",
+            "id_empleado": id_empleado
+        }
+
     except ValueError as e:
-        print(f"[API] Error de valor: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
     except Exception as e:
         import traceback
-        tb = traceback.format_exc()
-        print(f"[API] Error inesperado:\n{tb}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        print("[ERROR] Error inesperado:\n", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 @app.get("/empleados/{numero_identificacion}")
 def obtener_empleado(numero_identificacion: str):
@@ -680,3 +675,36 @@ def crear_usuario(request: CrearUsuarioRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
+#CUENTA BANCARIA---------------------------------------------------------------------------------
+
+# Obtener datos
+@app.get("/empleado/{id_empleado}/cuenta-bancaria")
+def get_cuenta_bancaria(id_empleado: int):
+    cuenta = AdminCRUD.obtener_cuenta_bancaria(id_empleado)
+    if not cuenta:
+        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada")
+    return cuenta
+
+# Crear cuenta
+@app.post("/empleado/{id_empleado}/cuenta-bancaria")
+def post_cuenta_bancaria(id_empleado: int, datos: CuentaBancariaInput):
+    id_cuenta = AdminCRUD.crear_cuenta_bancaria(
+        id_empleado=id_empleado,
+        codigo_banco=datos.codigo_banco,
+        numero_cuenta=datos.numero_cuenta,
+        tipo_cuenta=datos.tipo_cuenta
+    )
+    return {"mensaje": "Cuenta bancaria creada", "id_cuenta": id_cuenta}
+
+# Actualizar cuenta
+@app.put("/empleado/{id_empleado}/cuenta-bancaria")
+def put_cuenta_bancaria(id_empleado: int, datos: CuentaBancariaInput):
+    filas_afectadas = AdminCRUD.actualizar_cuenta_bancaria(
+        id_empleado=id_empleado,
+        codigo_banco=datos.codigo_banco,
+        numero_cuenta=datos.numero_cuenta,
+        tipo_cuenta=datos.tipo_cuenta
+    )
+    if filas_afectadas == 0:
+        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada para actualizar")
+    return {"mensaje": "Cuenta bancaria actualizada"}

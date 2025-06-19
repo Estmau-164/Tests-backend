@@ -22,6 +22,7 @@ class EmpleadoResponse(BaseModel):
     estado_civil: Optional[str] = None
 
 class EmpleadoBase(BaseModel):
+
         nombre: str
         apellido: str
         tipo_identificacion: str
@@ -210,3 +211,8 @@ class ReciboResponse(BaseModel):
     descuento_jubilacion: float
     descuento_obra_social: float
     sueldo_neto: float
+
+class CuentaBancariaInput(BaseModel):
+    codigo_banco: str
+    numero_cuenta: str
+    tipo_cuenta: str
