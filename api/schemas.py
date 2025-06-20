@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, time
+from pydantic import BaseModel, Field
 
 class EmpleadoResponse(BaseModel):
     """Modelo SOLO para respuestas (GET)"""
@@ -67,6 +68,7 @@ class NominaResponse(NominaBase):
     descuento_sindical: Optional[float] = None
     sueldo_bruto: float
     sueldo_neto: float
+    tipo: str
 
 
 class NominaListResponse(BaseModel):
@@ -76,6 +78,7 @@ class CalculoNominaRequest(BaseModel):
     id_empleado: int
     periodo: str
     fecha_calculo: date
+    tipo: str
 
 class EmpleadoNominaRequest(BaseModel):
     id_empleado: int
@@ -215,4 +218,12 @@ class ReciboResponse(BaseModel):
 class CuentaBancariaInput(BaseModel):
     codigo_banco: str
     numero_cuenta: str
+<<<<<<< HEAD
+=======
+    tipo_cuenta: str
+
+class CuentaBancariaModificar(BaseModel):
+    nombre_banco: str = Field(alias="codigo_banco")
+    numero_cuenta: str
+>>>>>>> main
     tipo_cuenta: str
