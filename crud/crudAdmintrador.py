@@ -832,15 +832,25 @@ class AdminCRUD:
             return nuevo_id
 
     @staticmethod
-    def actualizar_cuenta_bancaria(id_empleado: int, codigo_banco: str, numero_cuenta: str, tipo_cuenta: str):
+    def actualizar_cuenta_bancaria(id_empleado: int, nombre_banco: str, numero_cuenta: str, tipo_cuenta: str):
         with db.get_connection() as conn:
             cur = conn.cursor()
+
+            cur.execute("SELECT codigo_banco FROM banco WHERE nombre = %s", (nombre_banco,))
+            result = cur.fetchone()
+
+            if not result:
+                raise ValueError(f"No se encontró un banco con el nombre: {nombre_banco}")
+
+            codigo_banco = result[0]
+
             cur.execute("""
-                 UPDATE cuenta_bancaria
-                 SET codigo_banco = %s,
-                     numero_cuenta = %s,
-                     tipo_cuenta = %s
-                 WHERE id_empleado = %s
-             """, (codigo_banco, numero_cuenta, tipo_cuenta, id_empleado))
+                UPDATE cuenta_bancaria
+                SET codigo_banco = %s,
+                    numero_cuenta = %s,
+                    tipo_cuenta = %s
+                WHERE id_empleado = %s
+            """, (codigo_banco, numero_cuenta, tipo_cuenta, id_empleado))
+
             conn.commit()
-            return cur.rowcount  # Devuelve cuántas filas se actualizaron
+            return cur.rowcount
