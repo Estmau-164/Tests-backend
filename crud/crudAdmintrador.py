@@ -832,20 +832,6 @@ class AdminCRUD:
             return nuevo_id
 
     @staticmethod
-<<<<<<< HEAD
-    def actualizar_cuenta_bancaria(id_empleado: int, codigo_banco: str, numero_cuenta: str, tipo_cuenta: str):
-        with db.get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                 UPDATE cuenta_bancaria
-                 SET codigo_banco = %s,
-                     numero_cuenta = %s,
-                     tipo_cuenta = %s
-                 WHERE id_empleado = %s
-             """, (codigo_banco, numero_cuenta, tipo_cuenta, id_empleado))
-            conn.commit()
-            return cur.rowcount  # Devuelve cuántas filas se actualizaron
-=======
     def actualizar_cuenta_bancaria(id_empleado: int, nombre_banco: str, numero_cuenta: str, tipo_cuenta: str):
         with db.get_connection() as conn:
             cur = conn.cursor()
@@ -868,4 +854,3 @@ class AdminCRUD:
 
             conn.commit()
             return cur.rowcount
->>>>>>> main

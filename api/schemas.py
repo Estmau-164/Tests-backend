@@ -218,12 +218,9 @@ class ReciboResponse(BaseModel):
 class CuentaBancariaInput(BaseModel):
     codigo_banco: str
     numero_cuenta: str
-<<<<<<< HEAD
-=======
     tipo_cuenta: str
 
 class CuentaBancariaModificar(BaseModel):
     nombre_banco: str = Field(alias="codigo_banco")
     numero_cuenta: str
->>>>>>> main
     tipo_cuenta: str

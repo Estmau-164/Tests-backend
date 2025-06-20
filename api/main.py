@@ -25,11 +25,7 @@ from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResp
                       NominaBase, NominaListResponse, EmpleadoNominaRequest, EmpleadoConsulta,
                       EmpleadoIDRequest, EmpleadoPeriodoRequest, EmpleadoIDIntRequest,
                       BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest, LoginResponse, LoginResponse,
-<<<<<<< HEAD
-                      LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput)
-=======
                       LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput, CuentaBancariaModificar)
->>>>>>> main
 from fastapi import APIRouter, HTTPException
 from crud.database import db
 from fastapi.middleware.cors import CORSMiddleware
@@ -690,20 +686,6 @@ def post_cuenta_bancaria(id_empleado: int, datos: CuentaBancariaInput):
     )
     return {"mensaje": "Cuenta bancaria creada", "id_cuenta": id_cuenta}
 
-<<<<<<< HEAD
-# Actualizar cuenta
-@app.put("/empleado/{id_empleado}/cuenta-bancaria")
-def put_cuenta_bancaria(id_empleado: int, datos: CuentaBancariaInput):
-    filas_afectadas = AdminCRUD.actualizar_cuenta_bancaria(
-        id_empleado=id_empleado,
-        codigo_banco=datos.codigo_banco,
-        numero_cuenta=datos.numero_cuenta,
-        tipo_cuenta=datos.tipo_cuenta
-    )
-    if filas_afectadas == 0:
-        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada para actualizar")
-    return {"mensaje": "Cuenta bancaria actualizada"}
-=======
 #Actualiza cuenta
 @app.put("/empleado/{id_empleado}/cuenta-bancaria")
 def put_cuenta_bancaria(id_empleado: int, datos: CuentaBancariaModificar):
@@ -722,4 +704,3 @@ def put_cuenta_bancaria(id_empleado: int, datos: CuentaBancariaModificar):
     except Exception as e:
         print("[ERROR INTERNO]", traceback.format_exc())  # Log completo
         raise HTTPException(status_code=500, detail="Error interno del servidor")
->>>>>>> main
