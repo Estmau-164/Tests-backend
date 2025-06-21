@@ -44,7 +44,7 @@ def obtener_contrasena_usuario(id_usuario):
 
     if resultado is None:
         raise ValueError(f"Usuario con ID {id_usuario} no encontrado")
-    
+
     password_hash = resultado[0]
 
     return password_hash
@@ -101,17 +101,28 @@ class TestCrearUsuario:
         with pytest.raises(Exception):
             Usuario.crear_usuario(id_empleado, 1, "Flow_123", "", None)
 
+    def test_crear_usuario_dos_veces(self, crear_empleado):
+        id_empleado = crear_empleado["id_empleado"]
+        Usuario.crear_usuario(id_empleado, 1, "Flow_123", "contrA45!", None)
+        with pytest.raises(Exception):
+            Usuario.crear_usuario(id_empleado, 1, "GusGar123", "contrA45!", None)
+
+
 @pytest.mark.usefixtures("setup_schema")
 class TestVerificarContrasena:
 
     def test_verificar_contrasena_exitoso(self, crear_empleado):
         id_empleado = crear_empleado["id_empleado"]
-        id_usuario = Usuario.crear_usuario(id_empleado, 1, "Flow_123", "contrA45!", None)
+        id_usuario = Usuario.crear_usuario(
+            id_empleado, 1, "Flow_123", "contrA45!", None
+        )
         contrasenaHash = obtener_contrasena_usuario(id_usuario)
         assert Usuario.verificar_password("contrA45!", contrasenaHash) == True
 
     def test_verificar_contrasena_fallido(self, crear_empleado):
         id_empleado = crear_empleado["id_empleado"]
-        id_usuario = Usuario.crear_usuario(id_empleado, 1, "Flow_123", "contrA45!", None)
+        id_usuario = Usuario.crear_usuario(
+            id_empleado, 1, "Flow_123", "contrA45!", None
+        )
         contrasenaHash = obtener_contrasena_usuario(id_usuario)
         assert Usuario.verificar_password("contrA45", contrasenaHash) == False

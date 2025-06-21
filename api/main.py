@@ -25,7 +25,8 @@ from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResp
                       NominaBase, NominaListResponse, EmpleadoNominaRequest, EmpleadoConsulta,
                       EmpleadoIDRequest, EmpleadoPeriodoRequest, EmpleadoIDIntRequest,
                       BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest, LoginResponse, LoginResponse,
-                      LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput, CuentaBancariaModificar)
+                      LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput, CuentaBancariaModificar,
+                      SalarioInput, ConceptoInput, ConceptoOutput, ConceptoUpdate)
 from fastapi import APIRouter, HTTPException
 from crud.database import db
 from fastapi.middleware.cors import CORSMiddleware
@@ -519,7 +520,7 @@ async def buscar_nominas_empleado(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# Opción 4: Obtener nómina específica por ID (GET)
+# Obtener nómina específica por ID (GET)
 @app.get("/nominas/{id_nomina}", response_model=NominaResponse)
 async def obtener_nomina(id_nomina: int):
     try:
@@ -530,8 +531,8 @@ async def obtener_nomina(id_nomina: int):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
-@app.post("/calcular", response_model=NominaResponse)
+# Calcular Nomina
+@app.post("/calcular_nomina", response_model=NominaResponse)
 async def calcular_nomina_endpoint(request: CalculoNominaRequest):
     try:
         return NominaCRUD.calcular_nomina(
@@ -704,3 +705,128 @@ def put_cuenta_bancaria(id_empleado: int, datos: CuentaBancariaModificar):
     except Exception as e:
         print("[ERROR INTERNO]", traceback.format_exc())  # Log completo
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+#SALARIO
+@app.get("/api/salarios/historial")
+def historial_salarios(puesto_id: int, departamento_id: int, categoria_id: int):
+    historial = AdminCRUD.obtener_historial_salarios(puesto_id, departamento_id, categoria_id)
+    if not historial:
+        raise HTTPException(status_code=404, detail="No se encontró historial para esta combinación")
+    return historial
+
+@app.put("/api/salarios/actualizarSalario")
+def actualizar_salario(datos: SalarioInput):
+    try:
+        AdminCRUD.actualizar_salario(
+            datos.puesto_id,
+            datos.departamento_id,
+            datos.categoria_id,
+            datos.valor_por_defecto,
+            datos.fecha_inicio
+        )
+        return {"mensaje": "Salario actualizado correctamente"}
+
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+     
+
+@app.post("/api/conceptos/agregar")
+def agregar_concepto(datos: ConceptoInput):
+    try:
+        AdminCRUD.agregar_concepto(
+            datos.descripcion,
+            datos.tipo_concepto,
+            datos.valor_por_defecto,
+            datos.es_porcentaje
+        )
+        return {"mensaje": "✅ Concepto agregado correctamente"}
+
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+@app.get("/api/conceptos/", response_model=list[ConceptoOutput])
+def listar_conceptos():
+    try:
+        return AdminCRUD.listar_conceptos()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al listar conceptos")
+
+@app.delete("/api/conceptos/{codigo}")
+def eliminar_concepto(codigo: str):
+    try:
+        AdminCRUD.eliminar_concepto(codigo)
+        return {"mensaje": f"🗑 Concepto {codigo} eliminado correctamente"}
+
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al eliminar concepto")
+
+@app.put("/api/conceptos/{codigo}")
+def modificar_concepto(codigo: str, datos: ConceptoUpdate):
+    try:
+        AdminCRUD.modificar_concepto(codigo, datos)
+        return {"mensaje": f"✏️ Concepto {codigo} modificado correctamente"}
+
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al modificar concepto")
+
+@app.post("/api/documentos/subir-titulo")
+async def subir_documento(
+    archivo: UploadFile = File(...),
+    tipo: str = Form(...),
+    empleado_id: int = Form(...),
+    descripcion: str = Form(None)):
+    try:
+        contenido = await archivo.read()
+
+        print(f"Archivo recibido: {archivo.filename}, tamaño: {len(contenido)} bytes")
+
+        url_titulo = AdminCRUD.guardar_documento_tipo(
+            empleado_id,
+            contenido,
+            tipo,
+            descripcion
+        )
+        return {"mensaje": f"{tipo} subido correctamente", "url": url_titulo}
+
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        print(f"❌ Error al subir título: {e}")
+        raise HTTPException(status_code=500, detail="Error al subir el título")
+
+
+@app.get("/api/documentos/cv/{empleado_id}")
+def obtener_documento(empleado_id: int, tipo: str):
+    try:
+        return AdminCRUD.obtener_documento_tipo(empleado_id, tipo)
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener el {tipo}")
+
+
+@app.get("/api/biometrico/tiene-vector/{empleado_id}")
+def verificar_vectores(empleado_id: int):
+    try:
+        tiene = AdminCRUD.tiene_vectores_faciales(empleado_id)
+        return {"empleado_id": empleado_id, "tiene_vectores_completos": tiene}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al verificar vectores biométricos")
+
+
+
+
