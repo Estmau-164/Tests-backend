@@ -2,6 +2,8 @@ import pytest
 from crud.crudAdmintrador import AdminCRUD
 from api.schemas import EmpleadoBase
 from crud.crudUsuario import Usuario
+from crud.database import db
+import psycopg2
 
 
 @pytest.fixture
@@ -25,6 +27,27 @@ def crear_empleado():
     )
     ret = AdminCRUD.crear_empleado(empleado)
     return ret
+
+
+def obtener_contrasena_usuario(id_usuario):
+    conn = db.get_connection()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT contrasena
+            FROM usuario
+            WHERE id_usuario = %s
+        """,
+            (id_usuario,),
+        )
+        resultado = cur.fetchone()
+
+    if resultado is None:
+        raise ValueError(f"Usuario con ID {id_usuario} no encontrado")
+    
+    password_hash = resultado[0]
+
+    return password_hash
 
 
 @pytest.mark.usefixtures("setup_schema")
@@ -77,3 +100,18 @@ class TestCrearUsuario:
         id_empleado = crear_empleado["id_empleado"]
         with pytest.raises(Exception):
             Usuario.crear_usuario(id_empleado, 1, "Flow_123", "", None)
+
+@pytest.mark.usefixtures("setup_schema")
+class TestVerificarContrasena:
+
+    def test_verificar_contrasena_exitoso(self, crear_empleado):
+        id_empleado = crear_empleado["id_empleado"]
+        id_usuario = Usuario.crear_usuario(id_empleado, 1, "Flow_123", "contrA45!", None)
+        contrasenaHash = obtener_contrasena_usuario(id_usuario)
+        assert Usuario.verificar_password("contrA45!", contrasenaHash) == True
+
+    def test_verificar_contrasena_fallido(self, crear_empleado):
+        id_empleado = crear_empleado["id_empleado"]
+        id_usuario = Usuario.crear_usuario(id_empleado, 1, "Flow_123", "contrA45!", None)
+        contrasenaHash = obtener_contrasena_usuario(id_usuario)
+        assert Usuario.verificar_password("contrA45", contrasenaHash) == False
