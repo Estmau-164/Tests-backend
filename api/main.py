@@ -26,7 +26,8 @@ from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResp
                       EmpleadoIDRequest, EmpleadoPeriodoRequest, EmpleadoIDIntRequest,
                       BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest, LoginResponse, LoginResponse,
                       LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput, CuentaBancariaModificar,
-                      SalarioInput, ConceptoInput, ConceptoOutput, ConceptoUpdate)
+                      SalarioInput, ConceptoInput, ConceptoOutput, ConceptoUpdate, JornadaRequest,
+                      JornadaParcialRequest, IncidenciaAsistenciaRequest, AsistenciaBiometricaRequest)
 from fastapi import APIRouter, HTTPException
 from crud.database import db
 from fastapi.middleware.cors import CORSMiddleware
@@ -734,6 +735,7 @@ def actualizar_salario(datos: SalarioInput):
         raise HTTPException(status_code=500, detail="Error interno del servidor")
      
 
+
 @app.post("/api/conceptos/agregar")
 def agregar_concepto(datos: ConceptoInput):
     try:
@@ -828,5 +830,80 @@ def verificar_vectores(empleado_id: int):
         raise HTTPException(status_code=500, detail="Error al verificar vectores biométricos")
 
 
+#Jornada------------------------------------------------------------------------------
 
+@app.post("/registrar-jornada")
+def registrar_jornada(request: JornadaRequest):
+    try:
+        AdminCRUD.registrar_jornada(
+            id_empleado=request.id_empleado,
+            fecha=request.fecha,
+            dia=request.dia,
+            hora_entrada=request.hora_entrada,
+            hora_salida=request.hora_salida,
+            estado_jornada=request.estado_jornada,
+            horas_normales_trabajadas=request.horas_normales_trabajadas,
+            horas_extra=request.horas_extra,
+            motivo=request.motivo
+        )
+        return {"mensaje": "Jornada registrada correctamente"}
+    
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
+@app.post("/registrar-jornada-parcial")
+def registrar_jornada_parcial(request: JornadaParcialRequest):
+    try:
+        AdminCRUD.registrar_jornada_parcial(
+            id_empleado=request.id_empleado,
+            fecha=request.fecha,
+            hora_entrada=request.hora_entrada,
+            hora_salida=request.hora_salida,
+            motivo=request.motivo
+        )
+        return {"mensaje": "Registro parcial de jornada realizado correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.post("/registrar-incidencia/")
+def registrar_incidencia_asistencia_endpoint(datos: IncidenciaAsistenciaRequest):
+    try:
+        AdminCRUD.registrar_incidencia_asistencia(
+            id_empleado=datos.id_empleado,
+            fecha=datos.fecha,
+            dia=datos.dia,
+            tipo=datos.tipo,
+            descripcion=datos.descripcion
+        )
+        return {"mensaje": "Incidencia registrada correctamente"}
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+    
+@app.post("/registrar-asistenciaBiometrica/")
+def registrar_asistencia_biometrica(datos: AsistenciaBiometricaRequest):
+    try: 
+        AdminCRUD.registrar_asistencia_biometrica(
+            id_empleado=datos.id_empleado,
+            fecha=datos.fecha,
+            tipo=datos.tipo,
+            hora=datos.hora,
+            estado_asistencia=datos.estado_asistencia,
+            turno_asistencia=datos.turno_asistencia
+        )
+        return {"mensaje": "Asistencia biometrica registrada correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ve))
+    except Exception as e:
+        print("❌ Error en endpoint:", e)
+        raise HTTPException(status_code=500, detail="Error interno del servidor")

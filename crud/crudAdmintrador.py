@@ -1095,3 +1095,314 @@ class AdminCRUD:
             vectores = {row[0] for row in cur.fetchall()}
 
         return {'Neutro', 'Sonrisa', 'Giro'}.issubset(vectores)
+
+#Jornada---------------------------------------------------------------------------------------
+
+    @staticmethod
+    def registrar_jornada(
+            id_empleado: int,
+            fecha: date,
+            dia: str,
+            hora_entrada: time,
+            hora_salida: time,
+            estado_jornada: str,
+            horas_normales_trabajadas: float,
+            horas_extra: float,
+            motivo: str
+    ):
+        try:
+            # 1. Abrir conexión
+            with db.get_connection() as conn:
+
+                cur = conn.cursor()
+            #corrobar si ya existe o no 
+            cur.execute("""
+            SELECT 1 FROM registro_jornada 
+            WHERE id_empleado = %s AND fecha = %s
+            """, (id_empleado, fecha))
+
+            if cur.fetchone():
+                raise ValueError("Ya existe una jornada registrada para ese empleado en esa fecha.")
+            # 2. Obtener o crear el periodo
+            cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
+            id_periodo = cur.fetchone()[0]
+
+            # 3. Insertar en registro_jornada
+            cur.execute("""
+                INSERT INTO registro_jornada (
+                    id_empleado,
+                    id_periodo,
+                    fecha,
+                    dia,
+                    hora_entrada,
+                    hora_salida,
+                    estado_jornada,
+                    horas_normales_trabajadas,
+                    observaciones
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id_registro_jornada;
+            """, (
+                id_empleado,
+                id_periodo,
+                fecha,
+                dia,
+                hora_entrada,
+                hora_salida,
+                estado_jornada,
+                horas_normales_trabajadas,
+                motivo
+            ))
+
+            id_jornada_insertada = cur.fetchone()[0]
+
+            # 4. Verificar si es feriado
+            cur.execute("SELECT EXISTS (SELECT 1 FROM feriado WHERE fecha = %s);", (fecha,))
+            es_feriado = cur.fetchone()[0]
+
+            # 5. Si hay horas extra, insertar en registro_hora_extra
+            if horas_extra > 0:
+                tipo = None
+                observacion = None
+
+                if es_feriado or dia.lower() == 'domingo':
+                    tipo = '100%'
+                    observacion = 'Horas extra con recargo total (feriado o domingo)'
+                elif dia.lower() == 'sábado':
+                    if hora_salida > time(13, 0):
+                        tipo = '100%'
+                        observacion = 'Horas extra con recargo total (sábado después de las 13:00)'
+                    else:
+                        tipo = '50%'
+                        observacion = 'Horas extra con recargo del 50% (sábado antes de las 13:00)'
+                else:
+                    tipo = '50%'
+                    observacion = 'Horas extra con recargo del 50% (día de semana)'
+
+                cur.execute("""
+                    INSERT INTO registro_hora_extra (
+                        id_registro_jornada,
+                        cantidad_horas,
+                        tipo_hora_extra,
+                        observaciones
+                    ) VALUES (%s, %s, %s, %s);
+                """, (
+                    id_jornada_insertada,
+                    horas_extra,
+                    tipo,
+                    observacion
+                ))
+
+            # 6. Confirmar y cerrar
+            conn.commit()
+            print("✅ Jornada y horas extra registradas correctamente.")
+
+        except Exception as e:
+            if 'conn' in locals():
+                conn.rollback()
+            print("❌ Error al registrar jornada:", e)
+            raise e
+
+        finally:
+            if 'cur' in locals():
+                cur.close()
+            if 'conn' in locals():
+                conn.close()
+
+    @staticmethod
+    def registrar_jornada_parcial(id_empleado: int, fecha: date, hora_entrada: time = None, hora_salida: time = None,
+                                  motivo: str = ""):
+        if not hora_entrada and not hora_salida:
+            raise ValueError("Debe especificar al menos hora_entrada o hora_salida")
+
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+
+            # Obtener o crear el período
+            cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
+            id_periodo = cur.fetchone()[0]
+
+            # Verificar si ya existe un registro para esa fecha
+            cur.execute("""
+                SELECT id_registro_jornada, hora_entrada, hora_salida
+                FROM registro_jornada
+                WHERE id_empleado = %s AND fecha = %s
+            """, (id_empleado, fecha))
+
+            row = cur.fetchone()
+
+            if row:
+                id_registro, entrada_actual, salida_actual = row
+
+                nueva_entrada = hora_entrada or entrada_actual
+                nueva_salida = hora_salida or salida_actual
+
+                cur.execute("""
+                    UPDATE registro_jornada
+                    SET hora_entrada = %s,
+                        hora_salida = %s,
+                        observaciones = %s
+                    WHERE id_registro_jornada = %s
+                """, (nueva_entrada, nueva_salida, motivo, id_registro))
+            else:
+                dia = fecha.strftime('%A')  # obtener el nombre del día
+                cur.execute("""
+                    INSERT INTO registro_jornada (
+                        id_empleado,
+                        id_periodo,
+                        fecha,
+                        dia,
+                        hora_entrada,
+                        hora_salida,
+                        estado_jornada,
+                        horas_normales_trabajadas,
+                        observaciones
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    id_empleado,
+                    id_periodo,
+                    fecha,
+                    dia,
+                    hora_entrada,
+                    hora_salida,
+                    'Incompleta',
+                    0,
+                    motivo
+                ))
+
+            conn.commit()
+
+    @staticmethod
+    def registrar_incidencia_asistencia(
+            id_empleado,
+            fecha,
+            dia,
+            tipo,
+            descripcion
+    ):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            #corrobar si ya existe o no 
+            cur.execute("""
+            SELECT 1 FROM incidencia_asistencia
+            WHERE id_empleado = %s AND fecha = %s
+            """, (id_empleado, fecha))
+
+            if cur.fetchone():
+                raise ValueError("Ya existe una incidencia registrada para ese empleado en esa fecha.")
+
+            # 2. Obtener o crear el periodo
+            cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
+            id_periodo = cur.fetchone()[0]
+
+            # 3. Insertar en incidencia_asistencia
+            cur.execute("""
+                INSERT INTO incidencia_asistencia (
+                    id_empleado,
+                    id_periodo,
+                    fecha,
+                    dia,
+                    tipo,
+                    descripcion
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                id_empleado,
+                id_periodo,
+                fecha,
+                dia,
+                tipo,
+                descripcion
+            ))
+
+            conn.commit()
+            print("✅ Incidencia en asistencia registrada correctamente")
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print("❌ Error al registrar incidencia:", e)
+            raise e
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+    
+    @staticmethod
+    def registrar_asistencia_biometrica(
+        id_empleado,
+        fecha,
+        tipo,
+        hora,
+        estado_asistencia,
+        turno_asistencia  
+    ):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            
+            #corrobar si ya existe o no 
+            cur.execute("""
+            SELECT 1 FROM asistencia_biometrica
+            WHERE id_empleado = %s AND fecha = %s AND tipo = %s
+            """, (id_empleado, fecha,tipo))
+
+            if cur.fetchone():
+                raise ValueError(f"Ya existe una asistencia registrada de tipo {tipo} para ese empleado en esa fecha.")
+
+            # 2. Obtener o crear el periodo
+            cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
+            id_periodo = cur.fetchone()[0]
+            
+            #obtenemos el puesto
+            cur.execute("SELECT id_puesto FROM informacion_laboral WHERE id_empleado= %s;", (id_empleado,))
+            puesto_resultado = cur.fetchone()
+            if not puesto_resultado:
+                raise ValueError("El empleado no tiene información laboral registrada.")
+            id_puesto = puesto_resultado[0]
+
+
+            # 3. Insertar en incidencia_asistencia
+            cur.execute("""
+            INSERT INTO asistencia_biometrica (
+            id_empleado,
+            id_periodo,
+            id_puesto,
+            fecha,
+            tipo,
+            hora,
+            estado_asistencia,
+            turno_asistencia
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            id_empleado,
+            id_periodo,
+            id_puesto,
+            fecha,
+            tipo,
+            hora,
+            estado_asistencia,
+            turno_asistencia
+        ))
+
+            conn.commit()
+            print("✅ asistencia biometrica registrada correctamente")
+
+        except Exception as e:
+            if 'conn' in locals():
+                conn.rollback()
+            print("❌ Error al registrar asistencia biometrica:", e)
+            raise e
+
+        finally:
+            if 'cur' in locals():
+                cur.close()
+            if 'conn' in locals():
+                conn.close()
+        

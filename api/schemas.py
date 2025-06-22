@@ -250,3 +250,36 @@ class ConceptoUpdate(BaseModel):
     tipo_concepto: Optional[str] = None
     valor_por_defecto: Optional[float] = None
     es_porcentaje: Optional[bool] = None
+
+class JornadaRequest(BaseModel):
+    id_empleado: int
+    fecha: date
+    dia: str
+    hora_entrada: time
+    hora_salida: time
+    estado_jornada: str
+    horas_normales_trabajadas: float
+    horas_extra: float
+    motivo: str
+
+class JornadaParcialRequest(BaseModel):
+    id_empleado: int
+    fecha: date
+    hora_entrada: time | None = None
+    hora_salida: time | None = None
+    motivo: str
+
+class IncidenciaAsistenciaRequest(BaseModel):
+    id_empleado: int
+    fecha: date
+    dia: str
+    tipo: str
+    descripcion: str
+    
+class AsistenciaBiometricaRequest(BaseModel):
+    id_empleado: int
+    fecha: date
+    tipo: str
+    hora: time
+    estado_asistencia: str
+    turno_asistencia: str
