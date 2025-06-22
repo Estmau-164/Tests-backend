@@ -1,4 +1,3 @@
-from fastapi import FastAPI
 import face_recognition
 import numpy as np
 import base64
@@ -9,13 +8,14 @@ from PIL import Image
 import random
 
 from crud.crudEmpleado import RegistroHorario
-from reconocimiento.service.reconocimiento import identificar_persona, identificar_gesto
+from reconocimiento.service.reconocimiento import identificar_persona, identificar_gesto, buscar_mejor_match
 from reconocimiento.utils.utilsVectores import guardar_vector
 
-app = FastAPI()
+from fastapi.websockets import WebSocketState
 
-# Base de datos en memoria para fichajes
-fichajes = {}
+async def safe_send(ws, msg):
+    if ws.client_state == WebSocketState.CONNECTED:
+        await ws.send_text(msg)
 
 # eSTA ES LA VERSION QUE ANDABA
 
@@ -78,7 +78,7 @@ async def verificar_identidad(websocket, data):
         return
 
     vector = face_encodings[0].astype(np.float64)
-    id_empleado, distancia = identificar_persona(vector)
+    id_empleado, distancia = buscar_mejor_match(vector)
 
     if not id_empleado:
         await websocket.send_text("🚫 Persona no reconocida")
@@ -88,8 +88,15 @@ async def verificar_identidad(websocket, data):
     gesto_requerido = random.choice(["sonrisa", "giro", "cejas"])
 
     for intento in range(3):
-        await websocket.send_text(f"🔄 Por favor, realiza el gesto: {gesto_requerido}")
-        nueva_data = await websocket.receive_json()
+        if intento == 0:  # Solo en la primera iteración se envía este mensaje
+            await safe_send(websocket, f"🔄 Por favor, realiza el gesto: {gesto_requerido}")
+        if intento > 0:
+            await safe_send(websocket, f"🚫 Gesto incorrecto. Por favor, realiza el gesto: {gesto_requerido}")
+        try:
+            nueva_data = await websocket.receive_json()
+        except Exception as e:
+            await safe_send(websocket, f"⚠️ La conexión fue cerrada inesperadamente: {e}")
+            return
 
         try:
             image_data_gesto = base64.b64decode(nueva_data["imagen"])
@@ -98,37 +105,31 @@ async def verificar_identidad(websocket, data):
             face_encodings_gesto = face_recognition.face_encodings(rgb_gesto)
 
             if not face_encodings_gesto:
-                await websocket.send_text("❌ No se detectó rostro en la imagen del gesto")
+                await safe_send(websocket, "❌ No se detectó rostro en la imagen del gesto")
                 continue
 
             if not identificar_gesto(rgb_gesto, gesto_requerido):
-                await websocket.send_text(f"🚫 Gesto incorrecto. Repite: {gesto_requerido}")
                 continue
 
             # 🎉 Gesto válido -> registrar
             try:
                 registro = RegistroHorario.registrar_asistencia(int(id_empleado), fecha_hora)
                 if registro is None:
-                    await websocket.send_text("⚠️ Entrada fuera del rango permitido.")
+                    await safe_send(websocket, "⚠️ Entrada fuera del rango permitido.")
                     return
 
-                await websocket.send_text(f"✅ Se registró la {registro.tipo} del empleado {id_empleado} a las {registro.hora.strftime('%H:%M')} del {registro.fecha.strftime('%Y-%m-%d')}")
+                await safe_send(websocket,
+                    f"✅ Se registró la {registro.tipo} del empleado {id_empleado} "
+                    f"a las {registro.hora.strftime('%H:%M')} del {registro.fecha.strftime('%Y-%m-%d')}"
+                )
                 return
 
             except ValueError as e:
-                await websocket.send_text(f"❌ {e}")
+                await safe_send(websocket, f"❌ {e}")
                 return
 
         except Exception as e:
-            await websocket.send_text(f"⚠️ Error procesando imagen del gesto: {e}")
+            await safe_send(websocket, f"⚠️ Error procesando imagen del gesto: {e}")
             return
 
-    await websocket.send_text("🚫 Verificación fallida luego de 3 intentos.")
-
-
-
-
-
-@app.get("/fichadas")
-async def obtener_fichajes():
-    return fichajes
+    await safe_send(websocket, "🚫 Verificación fallida luego de 3 intentos.")
