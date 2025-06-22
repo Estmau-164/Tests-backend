@@ -10,10 +10,10 @@ def setup_schema():
     # Cargar archivo SQL con tablas y triggers
     schema_path = os.path.join(os.path.dirname(__file__), "sql", "test_schema.sql")
     inserts_path = os.path.join(os.path.dirname(__file__), "sql", "inserts.sql")
-    with open(schema_path, "r") as f:
+    with open(schema_path, "r", encoding="utf-8") as f:
         schema_sql = f.read()
 
-    with open(inserts_path, "r") as f:
+    with open(inserts_path, "r", encoding="utf-8") as f:
         inserts_sql = f.read()
 
     conn = db.get_connection()
