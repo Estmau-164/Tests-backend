@@ -86,9 +86,6 @@ class AdminCRUD:
             if conn:
                 conn.close()
 
-
-
-
     @staticmethod
     def crear_empleado2(nuevo_empleado):
         """Registra un nuevo empleado usando el pool de conexiones"""
@@ -242,18 +239,18 @@ class AdminCRUD:
                                      descripcion: str = None):
         """Registra o actualiza una jornada en el calendario"""
         try:
-                conn = db.get_connection()
-                cur = conn.cursor()
-                # Verificar si ya existe registro para esa fecha
-                cur.execute(
+            conn = db.get_connection()
+            cur = conn.cursor()
+            # Verificar si ya existe registro para esa fecha
+            cur.execute(
                     "SELECT 1 FROM calendario WHERE id_empleado = %s AND fecha = %s",
                     (id_empleado, fecha)
                 )
-                existe = cur.fetchone()
+            existe = cur.fetchone()
 
-                if existe:
-                    # Actualizar registro existente
-                    cur.execute(
+            if existe:
+                # Actualizar registro existente
+                cur.execute(
                         """
                         UPDATE calendario SET
                             estado_jornada = %s,
@@ -271,9 +268,9 @@ class AdminCRUD:
                             id_empleado, fecha
                         )
                     )
-                else:
-                    # Insertar nuevo registro
-                    cur.execute(
+            else:
+                # Insertar nuevo registro
+                cur.execute(
                         """
                         INSERT INTO calendario (
                             id_empleado, fecha, dia, estado_jornada,
@@ -290,8 +287,8 @@ class AdminCRUD:
                         )
                     )
 
-                db.conn.commit()
-                return cur.fetchone()[0]
+            db.conn.commit()
+            return cur.fetchone()[0]
         except Exception as e:
             db.conn.rollback()
             raise Exception(f"Error al registrar jornada: {e}")
@@ -491,7 +488,6 @@ class AdminCRUD:
             if conn:
                 db.return_connection(conn)
 
-
     @staticmethod
     def obtener_puesto_por_id_empleado(id_empleado: int) -> Optional[str]:
         """
@@ -631,7 +627,6 @@ class AdminCRUD:
         result = cur.fetchone()
         return result[0] if result else None
 
-
     @staticmethod
     def actualizar_datos_personales2(id_empleado: int, telefono: str = None,
                                     correo_electronico: str = None, calle: str = None,
@@ -666,6 +661,16 @@ class AdminCRUD:
             updates = []
             params = []
 
+            validacion_entrada.validar_actualizar_datos_empleado(
+                telefono,
+                correo_electronico,
+                calle,
+                numero_calle,
+                localidad,
+                partido,
+                provincia
+            )
+
             if telefono is not None:
                 updates.append("telefono = %s")
                 params.append(telefono)
@@ -698,15 +703,6 @@ class AdminCRUD:
                 params.append(partido)
 
             if provincia is not None:
-                # Validar provincia
-                provincias_validas = ['Buenos Aires', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba',
-                                      'Corrientes', 'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa',
-                                      'La Rioja', 'Mendoza', 'Misiones', 'Neuquén', 'Río Negro',
-                                      'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe',
-                                      'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
-                                      'Ciudad Autónoma de Buenos Aires']
-                if provincia not in provincias_validas:
-                    raise ValueError(f"Provincia inválida. Opciones válidas: {provincias_validas}")
                 updates.append("provincia = %s")
                 params.append(provincia)
 
@@ -731,8 +727,6 @@ class AdminCRUD:
         finally:
             if conn:
                 conn.close()
-
-
 
     @staticmethod
     def actualizar_imagen_perfil(image_bytes: bytes, usuario_id: int):
@@ -792,7 +786,7 @@ class AdminCRUD:
         finally:
             conn.close()
 
-#CUENTA BANCARIA-----------------------------------------------------------------------------------------------------
+    # CUENTA BANCARIA-----------------------------------------------------------------------------------------------------
     @staticmethod
     def obtener_cuenta_bancaria(id_empleado: int):
         with db.get_connection() as conn:
@@ -855,7 +849,7 @@ class AdminCRUD:
             conn.commit()
             return cur.rowcount
 
-##SALARIO
+    ##SALARIO
     @staticmethod
     def obtener_historial_salarios(puesto_id: int, departamento_id: int, categoria_id: int):
         with db.get_connection() as conn:
@@ -1096,7 +1090,7 @@ class AdminCRUD:
 
         return {'Neutro', 'Sonrisa', 'Giro'}.issubset(vectores)
 
-#Jornada---------------------------------------------------------------------------------------
+    # Jornada---------------------------------------------------------------------------------------
 
     @staticmethod
     def registrar_jornada(
@@ -1115,7 +1109,7 @@ class AdminCRUD:
             with db.get_connection() as conn:
 
                 cur = conn.cursor()
-            #corrobar si ya existe o no 
+            # corrobar si ya existe o no
             cur.execute("""
             SELECT 1 FROM registro_jornada 
             WHERE id_empleado = %s AND fecha = %s
@@ -1285,7 +1279,7 @@ class AdminCRUD:
         try:
             conn = db.get_connection()
             cur = conn.cursor()
-            #corrobar si ya existe o no 
+            # corrobar si ya existe o no
             cur.execute("""
             SELECT 1 FROM incidencia_asistencia
             WHERE id_empleado = %s AND fecha = %s
@@ -1331,7 +1325,7 @@ class AdminCRUD:
                 cur.close()
             if conn:
                 conn.close()
-    
+
     @staticmethod
     def registrar_asistencia_biometrica(
         id_empleado,
@@ -1346,8 +1340,8 @@ class AdminCRUD:
         try:
             conn = db.get_connection()
             cur = conn.cursor()
-            
-            #corrobar si ya existe o no 
+
+            # corrobar si ya existe o no
             cur.execute("""
             SELECT 1 FROM asistencia_biometrica
             WHERE id_empleado = %s AND fecha = %s AND tipo = %s
@@ -1359,14 +1353,13 @@ class AdminCRUD:
             # 2. Obtener o crear el periodo
             cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
             id_periodo = cur.fetchone()[0]
-            
-            #obtenemos el puesto
+
+            # obtenemos el puesto
             cur.execute("SELECT id_puesto FROM informacion_laboral WHERE id_empleado= %s;", (id_empleado,))
             puesto_resultado = cur.fetchone()
             if not puesto_resultado:
                 raise ValueError("El empleado no tiene información laboral registrada.")
             id_puesto = puesto_resultado[0]
-
 
             # 3. Insertar en incidencia_asistencia
             cur.execute("""
@@ -1405,4 +1398,3 @@ class AdminCRUD:
                 cur.close()
             if 'conn' in locals():
                 conn.close()
-        
