@@ -116,13 +116,13 @@ class TestVerificarContrasena:
         id_usuario = Usuario.crear_usuario(
             id_empleado, 1, "Flow_123", "contrA45!", None
         )
-        contrasenaHash = obtener_contrasena_usuario(id_usuario)
-        assert Usuario.verificar_password("contrA45!", contrasenaHash) == True
+        contrasena_hash = obtener_contrasena_usuario(id_usuario)
+        assert Usuario.verificar_password("contrA45!", contrasena_hash) == True
 
     def test_verificar_contrasena_fallido(self, crear_empleado):
         id_empleado = crear_empleado["id_empleado"]
         id_usuario = Usuario.crear_usuario(
             id_empleado, 1, "Flow_123", "contrA45!", None
         )
-        contrasenaHash = obtener_contrasena_usuario(id_usuario)
-        assert Usuario.verificar_password("contrA45", contrasenaHash) == False
+        contrasena_hash = obtener_contrasena_usuario(id_usuario)
+        assert Usuario.verificar_password("contrA45", contrasena_hash) == False
