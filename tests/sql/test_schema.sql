@@ -3,6 +3,7 @@ DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 
 
+
 CREATE TABLE empleado (
     id_empleado SERIAL PRIMARY KEY NOT NULL,
     nombre VARCHAR(50) NOT NULL,
@@ -22,23 +23,49 @@ CREATE TABLE empleado (
         'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza',
         'Misiones', 'Neuquén', 'Río Negro', 'Salta', 'San Juan', 'San Luis',
         'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
-        'Ciudad Autónoma de Buenos Aires'
+        'Ciudad de Buenos Aires'
     )
 	),
     genero VARCHAR(30) CHECK (genero IN ('Masculino', 'Femenino', 'No binario', 'Prefiere no especificar', 'Otro')),
     pais_nacimiento VARCHAR(30) NOT NULL CHECK (pais_nacimiento IN ('Argentina', 'Brasil', 'Chile', 'Uruguay', 'Paraguay', 'Bolivia', 'Perú', 'Ecuador', 'Colombia', 'Venezuela', 'México')),
-    estado_civil VARCHAR(30) CHECK (estado_civil IN ('Soltero/a', 'Casado/a', 'Divorciado/a', 'Viudo/a'))
+    estado_civil VARCHAR(30) CHECK (estado_civil IN ('Soltero/a', 'Casado/a', 'Divorciado/a', 'Viudo/a')),
+    imagen_perfil_url text
+);
+
+CREATE TABLE pais(
+	codigo_pais VARCHAR(10) PRIMARY KEY NOT NULL,
+	nombre VARCHAR(30) UNIQUE NOT NULL
+);
+
+CREATE TABLE provincia(
+	codigo_provincia INTEGER PRIMARY KEY NOT NULL,
+	nombre VARCHAR(50) UNIQUE NOT NULL
+);
+
+CREATE TABLE localidad(
+	codigo_localidad VARCHAR(30) PRIMARY KEY NOT NULL,
+	codigo_provincia INTEGER NOT NULL REFERENCES provincia(codigo_provincia),
+	nombre  VARCHAR(50) NOT NULL,
+	UNIQUE(codigo_localidad,nombre)
+);
+
+
+CREATE TABLE partido(
+	codigo_partido VARCHAR(10) PRIMARY KEY NOT NULL,
+	codigo_provincia INTEGER NOT NULL REFERENCES provincia(codigo_provincia),
+	nombre VARCHAR(50) NOT NULL,
+	UNIQUE(codigo_partido,nombre)	
 );
 
 CREATE TABLE periodo_empleado (
     id_periodo SERIAL PRIMARY KEY,
     id_empleado INTEGER NOT NULL REFERENCES empleado(id_empleado),
-    periodo_fecha DATE NOT NULL, 
+    periodo_fecha DATE NOT NULL, -- Seria el primer dia del mes tipo 2025-05-1
     presentismo BOOLEAN NOT NULL DEFAULT TRUE,
     porcentaje_asistencia NUMERIC(5,2), 
     faltas_justificadas INTEGER DEFAULT 0,
     faltas_injustificadas INTEGER DEFAULT 0,
-    periodo_texto VARCHAR(20), 
+    periodo_texto VARCHAR(20), --Seria el periodo en formato 'MAYO 2025'
     valor_hora NUMERIC(10,2),
     UNIQUE(id_empleado,periodo_fecha)
 );
@@ -46,22 +73,32 @@ CREATE TABLE periodo_empleado (
 CREATE TABLE rol (
     id_rol SERIAL PRIMARY KEY NOT NULL,
     nombre VARCHAR(50) NOT NULL UNIQUE,
-	fecha_creacion DATE NOT NULL,
-	online_login BOOLEAN DEFAULT FALSE,
-	offline_login BOOLEAN DEFAULT FALSE,
-	ver_datos_empleado BOOLEAN DEFAULT FALSE,
-    editar_datos_empleado BOOLEAN DEFAULT FALSE,
+    fecha_creacion DATE NOT NULL,
+    online_login BOOLEAN DEFAULT FALSE,
+    offline_login BOOLEAN DEFAULT FALSE,
+    ver_datos_personales BOOLEAN DEFAULT FALSE,
+    editar_datos_personales BOOLEAN DEFAULT FALSE,
+    ver_datos_laborales BOOLEAN DEFAULT FALSE,
+    agregar_datos_laborales BOOLEAN DEFAULT FALSE,
+    editar_datos_laborales BOOLEAN default FALSE,
+    agregar_empleado BOOLEAN default FALSE,
     ver_registro_asistencia BOOLEAN DEFAULT FALSE,
-    editar_registro_asistencia BOOLEAN DEFAULT FALSE,
-    ver_recibos_sueldo BOOLEAN DEFAULT FALSE,
-    ver_horas_extra BOOLEAN DEFAULT FALSE,
-    editar_horas_extra BOOLEAN DEFAULT FALSE,
-    ver_nomina BOOLEAN DEFAULT FALSE,
-    descargar_nomina BOOLEAN DEFAULT FALSE,
-    enviar_notificaciones BOOLEAN DEFAULT FALSE,
-    configurar_modelos_ml BOOLEAN DEFAULT FALSE,
-    ver_datos_modelos_ml BOOLEAN DEFAULT FALSE,
-    aprobar_solicitudes BOOLEAN DEFAULT FALSE,
+    ver_informacion_bancaria BOOLEAN DEFAULT FALSE,
+    editar_informacion_bancaria BOOLEAN DEFAULT FALSE,
+    ingresar_asistencia BOOLEAN DEFAULT FALSE,
+    ingresar_inasistencia BOOLEAN DEFAULT FALSE,
+    ver_historial_nominas BOOLEAN DEFAULT FALSE,
+    calcular_nomina_manualmente BOOLEAN DEFAULT FALSE,
+    calcular_nomina_automaticamente BOOLEAN DEFAULT FALSE,
+    agregar_concepto BOOLEAN DEFAULT FALSE,
+    agregar_departamento BOOLEAN DEFAULT FALSE,
+    agregar_puesto BOOLEAN DEFAULT FALSE,
+    agregar_categoria BOOLEAN DEFAULT FALSE,
+    agregar_salario_con_vigencia BOOLEAN DEFAULT FALSE,
+    ver_vista_previa_recibo_sueldo BOOLEAN DEFAULT FALSE,
+    descargar_recibo_sueldo BOOLEAN DEFAULT FALSE,
+    ver_reportes BOOLEAN DEFAULT FALSE,	
+    cerrar_sesion BOOLEAN DEFAULT FALSE,
     descripcion TEXT
 );
 
@@ -71,15 +108,16 @@ CREATE TABLE usuario (
     id_rol INTEGER NOT NULL REFERENCES rol(id_rol),
     nombre_usuario VARCHAR(50) NOT NULL UNIQUE,
     contrasena VARCHAR(255) NOT NULL,
-    esta_Activo BOOLEAN DEFAULT FALSE,
+    esta_Activo BOOLEAN NOT NULL DEFAULT FALSE,
     fecha_activacion DATE,
-    fecha_creacion DATE DEFAULT CURRENT_DATE,
-	motivo TEXT
+    fecha_creacion DATE NOT NULL DEFAULT CURRENT_DATE,
+    motivo TEXT
 );
 
 CREATE TABLE dato_biometrico_facial(
 	id_biometrico SERIAL PRIMARY KEY NOT NULL,
 	id_empleado INTEGER NOT NULL UNIQUE REFERENCES empleado(id_empleado),
+        tipo_vector VARCHAR(20) NOT NULL CHECK (tipo_vector IN ('Neutro', 'Sonrisa', 'Giro')),
 	vector_biometrico TEXT UNIQUE NOT NULL
 );
 
@@ -100,16 +138,16 @@ CREATE TABLE categoria (
 );
 
 CREATE TABLE banco (
-    id_banco SERIAL PRIMARY KEY NOT NULL,
+    codigo_banco VARCHAR(10) PRIMARY KEY NOT NULL,
     nombre VARCHAR(50) UNIQUE NOT NULL
 );
 
 CREATE TABLE cuenta_bancaria (
     id_cuenta SERIAL PRIMARY KEY,
     id_empleado INTEGER NOT NULL REFERENCES empleado(id_empleado),
-    id_banco INTEGER NOT NULL REFERENCES banco(id_banco),
+    codigo_banco VARCHAR(10) NOT NULL REFERENCES banco(codigo_banco),
     numero_cuenta VARCHAR(30) NOT NULL,
-    tipo_cuenta VARCHAR(30) CHECK (tipo_cuenta IN ('Caja de ahorro', 'Cuenta corriente'))
+    tipo_cuenta VARCHAR(30) NOT NULL CHECK (tipo_cuenta IN ('Caja de ahorro', 'Cuenta corriente'))
 );
 
 CREATE TABLE nomina (
@@ -235,7 +273,7 @@ CREATE TABLE incidencia_asistencia(
     	id_periodo INTEGER NOT NULL REFERENCES periodo_empleado(id_periodo),
 	fecha DATE NOT NULL,
 	dia VARCHAR(30) NOT NULL CHECK (dia IN ('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo')),
-	tipo VARCHAR(30) NOT NULL CHECK (tipo IN ('Falta justificada','Falta no justificada', 'Licencia médica', 'Vacaciones', 'Suspensión','No laboral','Otra')),
+	tipo VARCHAR(30) NOT NULL CHECK (tipo IN ('Falta justificada','Falta no justificada','Licencia médica', 'Vacaciones', 'Suspensión','No laboral','Otra')),
 	descripcion TEXT,
 	UNIQUE (id_empleado,id_periodo,fecha)
 );
@@ -260,7 +298,7 @@ CREATE TABLE informacion_laboral(
 	id_categoria INTEGER NOT NULL REFERENCES categoria(id_categoria),
 	fecha_ingreso DATE NOT NULL,
 	fecha_finalizacion DATE,
-	turno VARCHAR(20) NOT NULL CHECK (turno IN ('Mañana', 'Tarde', 'Noche', 'Otro')),
+	turno VARCHAR(20) NOT NULL CHECK (turno IN ('Mañana', 'Tarde', 'Noche')),
 	hora_inicio_turno TIME NOT NULL,
  	hora_fin_turno TIME NOT NULL,
 	cantidad_horas_trabajo INTEGER NOT NULL,
@@ -373,7 +411,7 @@ JOIN
 JOIN 
 	cuenta_bancaria cu on e.id_empleado = cu.id_empleado
 JOIN
-	banco b ON cu.id_banco = b.id_banco
+	banco b ON cu.codigo_banco = b.codigo_banco
 JOIN
         periodo_empleado pe ON n.id_periodo = pe.id_periodo AND n.id_empleado = pe.id_empleado;
 

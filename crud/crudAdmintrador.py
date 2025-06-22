@@ -5,7 +5,7 @@ from .database import db
 from .crudEmpleado import Empleado
 from typing import Optional
 from typing import Tuple, List
-from api.schemas import EmpleadoResponse
+from api.schemas import EmpleadoResponse, ConceptoUpdate
 import cloudinary
 import cloudinary.uploader
 from cloudinary.uploader import upload as cloudinary_upload
@@ -854,3 +854,555 @@ class AdminCRUD:
 
             conn.commit()
             return cur.rowcount
+
+##SALARIO
+    @staticmethod
+    def obtener_historial_salarios(puesto_id: int, departamento_id: int, categoria_id: int):
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT valor_por_defecto, fecha_inicio, fecha_fin
+                FROM salario_base
+                WHERE id_puesto = %s AND id_departamento = %s AND id_categoria = %s
+                ORDER BY fecha_inicio DESC
+            """, (puesto_id, departamento_id, categoria_id))
+            resultados = cur.fetchall()
+            return [
+                {
+                    "valor": float(row[0]),
+                    "fecha_inicio": row[1].isoformat(),
+                    "fecha_fin": row[2].isoformat() if row[2] else None,
+                }
+                for row in resultados
+            ]
+    @staticmethod
+    def actualizar_salario(puesto_id: int, departamento_id: int, categoria_id: int, valor_por_defecto: float, fecha_inicio: str):
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+
+            # Validaciones (opcional si ya validaste en la API)
+            cur.execute("SELECT 1 FROM puesto WHERE id_puesto = %s", (puesto_id,))
+            if not cur.fetchone():
+                raise ValueError(f"No existe el puesto con ID {puesto_id}")
+
+            cur.execute("SELECT 1 FROM departamento WHERE id_departamento = %s", (departamento_id,))
+            if not cur.fetchone():
+                raise ValueError(f"No existe el departamento con ID {departamento_id}")
+
+            cur.execute("SELECT 1 FROM categoria WHERE id_categoria = %s", (categoria_id,))
+            if not cur.fetchone():
+                raise ValueError(f"No existe la categoría con ID {categoria_id}")
+
+            # Insertar nuevo salario
+            cur.execute("""
+                INSERT INTO salario_base (id_puesto, id_departamento, id_categoria, valor_por_defecto, fecha_inicio)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (puesto_id, departamento_id, categoria_id, valor_por_defecto, fecha_inicio))
+
+            conn.commit()
+
+    @staticmethod
+    def agregar_concepto(descripcion: str, tipo_concepto: str, valor_por_defecto: float, es_porcentaje: bool):
+        conceptos_validos = [
+            'Remunerativo', 'No remunerativo', 'Deducción', 'Retención',
+            'Percepción', 'Indemnización', 'Reintegro', 'Premio',
+            'Multa', 'Ajuste', 'Anticipo', 'Vacaciones'
+        ]
+
+        if tipo_concepto not in conceptos_validos:
+            raise ValueError(f"Tipo de concepto inválido: {tipo_concepto}")
+
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+
+            # Obtener último código insertado
+            cur.execute("SELECT codigo FROM concepto WHERE codigo LIKE 'C%' ORDER BY codigo DESC LIMIT 1")
+            ultimo = cur.fetchone()
+            if ultimo:
+                ultimo_num = int(ultimo[0][1:])  # Quita la "C" y convierte a int
+                nuevo_codigo = f"C{ultimo_num + 1:03d}"
+            else:
+                nuevo_codigo = "C001"
+
+            # Insertar el nuevo concepto
+            cur.execute("""
+                INSERT INTO concepto (codigo, descripcion, tipo_concepto, valor_por_defecto, es_porcentaje)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (nuevo_codigo, descripcion, tipo_concepto, valor_por_defecto, es_porcentaje))
+
+            conn.commit()
+
+    @staticmethod
+    def listar_conceptos():
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT codigo, descripcion, tipo_concepto, valor_por_defecto, es_porcentaje FROM concepto ORDER BY codigo")
+            conceptos = cur.fetchall()
+
+        return [
+            {
+                "codigo": c[0],
+                "descripcion": c[1],
+                "tipo_concepto": c[2],
+                "valor_por_defecto": float(c[3]) if c[3] is not None else None,
+                "es_porcentaje": c[4]
+            }
+            for c in conceptos
+        ]
+
+    @staticmethod
+    def eliminar_concepto(codigo: str):
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+
+            # Verificar existencia
+            cur.execute("SELECT 1 FROM concepto WHERE codigo = %s", (codigo,))
+            if not cur.fetchone():
+                raise ValueError(f"No existe el concepto con código {codigo}")
+
+            # Eliminar
+            cur.execute("DELETE FROM concepto WHERE codigo = %s", (codigo,))
+            conn.commit()
+
+    @staticmethod
+    def modificar_concepto(codigo: str, datos: ConceptoUpdate):
+        conceptos_validos = [
+            'Remunerativo', 'No remunerativo', 'Deducción', 'Retención',
+            'Percepción', 'Indemnización', 'Reintegro', 'Premio',
+            'Multa', 'Ajuste', 'Anticipo', 'Vacaciones'
+        ]
+
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+
+            # Verificar que el concepto exista
+            cur.execute("SELECT 1 FROM concepto WHERE codigo = %s", (codigo,))
+            if not cur.fetchone():
+                raise ValueError(f"No existe el concepto con código {codigo}")
+
+            # Armar la consulta dinámica según los campos enviados
+            campos = []
+            valores = []
+
+            if datos.descripcion is not None:
+                campos.append("descripcion = %s")
+                valores.append(datos.descripcion)
+
+            if datos.tipo_concepto is not None:
+                if datos.tipo_concepto not in conceptos_validos:
+                    raise ValueError(f"Tipo de concepto inválido: {datos.tipo_concepto}")
+                campos.append("tipo_concepto = %s")
+                valores.append(datos.tipo_concepto)
+
+            if datos.valor_por_defecto is not None:
+                campos.append("valor_por_defecto = %s")
+                valores.append(datos.valor_por_defecto)
+
+            if datos.es_porcentaje is not None:
+                campos.append("es_porcentaje = %s")
+                valores.append(datos.es_porcentaje)
+
+            if not campos:
+                raise ValueError("No se enviaron campos para actualizar")
+
+            valores.append(codigo)  # Para el WHERE
+
+            query = f"UPDATE concepto SET {', '.join(campos)} WHERE codigo = %s"
+            cur.execute(query, tuple(valores))
+            conn.commit()
+
+    @staticmethod
+    def guardar_documento_tipo(empleado_id: int, contenido: bytes, tipo: str, descripcion: str = None):
+        tipos_validos = [
+            'DNI', 'CUIL', 'Partida de nacimiento', 'CV', 'Título', 'Domicilio',
+            'AFIP', 'Foto', 'CBU', 'Certificado médico', 'Licencia de conducir', 'Contrato', 'Otros'
+        ]
+
+        if tipo not in tipos_validos:
+            raise ValueError(f"Tipo de documento inválido: {tipo}")
+
+        conn = None
+        try:
+            # Verificar existencia de empleado
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM empleado WHERE id_empleado = %s", (empleado_id,))
+            if not cur.fetchone():
+                raise ValueError(f"No existe el empleado con ID {empleado_id}")
+
+            # Subir a Cloudinary
+            result = cloudinary.uploader.upload(
+                io.BytesIO(contenido),
+                resource_type="raw",
+                folder=f"documentos_{tipo.lower()}",
+                public_id=f"{empleado_id}_{tipo.lower()}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                use_filename=True,
+                overwrite=False
+            )
+            url_archivo = result["secure_url"]
+
+            # Insertar en tabla
+            cur.execute("""
+                INSERT INTO documento (id_empleado, tipo, archivo_asociado, descripcion)
+                VALUES (%s, %s, %s, %s)
+            """, (empleado_id, tipo, url_archivo, descripcion))
+            conn.commit()
+
+            return url_archivo
+
+        except Exception as e:
+            raise Exception(f"Error al guardar documento tipo {tipo}: {e}")
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def obtener_documento_tipo(empleado_id: int, tipo: str):
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id_documento, tipo, archivo_asociado, descripcion, fecha_subida
+                FROM documento
+                WHERE id_empleado = %s AND tipo = %s
+                ORDER BY fecha_subida DESC
+                LIMIT 1
+            """, (empleado_id, tipo))
+            row = cur.fetchone()
+
+            if not row:
+                raise ValueError(f"No se encontró documento tipo '{tipo}' para el empleado {empleado_id}")
+
+            return {
+                "id_documento": row[0],
+                "tipo": row[1],
+                "url": row[2],
+                "descripcion": row[3],
+                "fecha_subida": row[4].isoformat()
+            }
+
+    @staticmethod
+    def tiene_vectores_faciales(id_empleado: int) -> bool:
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+
+            cur.execute("""
+                SELECT tipo_vector
+                FROM dato_biometrico_facial
+                WHERE id_empleado = %s
+            """, (id_empleado,))
+
+            vectores = {row[0] for row in cur.fetchall()}
+
+        return {'Neutro', 'Sonrisa', 'Giro'}.issubset(vectores)
+
+#Jornada---------------------------------------------------------------------------------------
+
+    @staticmethod
+    def registrar_jornada(
+            id_empleado: int,
+            fecha: date,
+            dia: str,
+            hora_entrada: time,
+            hora_salida: time,
+            estado_jornada: str,
+            horas_normales_trabajadas: float,
+            horas_extra: float,
+            motivo: str
+    ):
+        try:
+            # 1. Abrir conexión
+            with db.get_connection() as conn:
+
+                cur = conn.cursor()
+            #corrobar si ya existe o no 
+            cur.execute("""
+            SELECT 1 FROM registro_jornada 
+            WHERE id_empleado = %s AND fecha = %s
+            """, (id_empleado, fecha))
+
+            if cur.fetchone():
+                raise ValueError("Ya existe una jornada registrada para ese empleado en esa fecha.")
+            # 2. Obtener o crear el periodo
+            cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
+            id_periodo = cur.fetchone()[0]
+
+            # 3. Insertar en registro_jornada
+            cur.execute("""
+                INSERT INTO registro_jornada (
+                    id_empleado,
+                    id_periodo,
+                    fecha,
+                    dia,
+                    hora_entrada,
+                    hora_salida,
+                    estado_jornada,
+                    horas_normales_trabajadas,
+                    observaciones
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id_registro_jornada;
+            """, (
+                id_empleado,
+                id_periodo,
+                fecha,
+                dia,
+                hora_entrada,
+                hora_salida,
+                estado_jornada,
+                horas_normales_trabajadas,
+                motivo
+            ))
+
+            id_jornada_insertada = cur.fetchone()[0]
+
+            # 4. Verificar si es feriado
+            cur.execute("SELECT EXISTS (SELECT 1 FROM feriado WHERE fecha = %s);", (fecha,))
+            es_feriado = cur.fetchone()[0]
+
+            # 5. Si hay horas extra, insertar en registro_hora_extra
+            if horas_extra > 0:
+                tipo = None
+                observacion = None
+
+                if es_feriado or dia.lower() == 'domingo':
+                    tipo = '100%'
+                    observacion = 'Horas extra con recargo total (feriado o domingo)'
+                elif dia.lower() == 'sábado':
+                    if hora_salida > time(13, 0):
+                        tipo = '100%'
+                        observacion = 'Horas extra con recargo total (sábado después de las 13:00)'
+                    else:
+                        tipo = '50%'
+                        observacion = 'Horas extra con recargo del 50% (sábado antes de las 13:00)'
+                else:
+                    tipo = '50%'
+                    observacion = 'Horas extra con recargo del 50% (día de semana)'
+
+                cur.execute("""
+                    INSERT INTO registro_hora_extra (
+                        id_registro_jornada,
+                        cantidad_horas,
+                        tipo_hora_extra,
+                        observaciones
+                    ) VALUES (%s, %s, %s, %s);
+                """, (
+                    id_jornada_insertada,
+                    horas_extra,
+                    tipo,
+                    observacion
+                ))
+
+            # 6. Confirmar y cerrar
+            conn.commit()
+            print("✅ Jornada y horas extra registradas correctamente.")
+
+        except Exception as e:
+            if 'conn' in locals():
+                conn.rollback()
+            print("❌ Error al registrar jornada:", e)
+            raise e
+
+        finally:
+            if 'cur' in locals():
+                cur.close()
+            if 'conn' in locals():
+                conn.close()
+
+    @staticmethod
+    def registrar_jornada_parcial(id_empleado: int, fecha: date, hora_entrada: time = None, hora_salida: time = None,
+                                  motivo: str = ""):
+        if not hora_entrada and not hora_salida:
+            raise ValueError("Debe especificar al menos hora_entrada o hora_salida")
+
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+
+            # Obtener o crear el período
+            cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
+            id_periodo = cur.fetchone()[0]
+
+            # Verificar si ya existe un registro para esa fecha
+            cur.execute("""
+                SELECT id_registro_jornada, hora_entrada, hora_salida
+                FROM registro_jornada
+                WHERE id_empleado = %s AND fecha = %s
+            """, (id_empleado, fecha))
+
+            row = cur.fetchone()
+
+            if row:
+                id_registro, entrada_actual, salida_actual = row
+
+                nueva_entrada = hora_entrada or entrada_actual
+                nueva_salida = hora_salida or salida_actual
+
+                cur.execute("""
+                    UPDATE registro_jornada
+                    SET hora_entrada = %s,
+                        hora_salida = %s,
+                        observaciones = %s
+                    WHERE id_registro_jornada = %s
+                """, (nueva_entrada, nueva_salida, motivo, id_registro))
+            else:
+                dia = fecha.strftime('%A')  # obtener el nombre del día
+                cur.execute("""
+                    INSERT INTO registro_jornada (
+                        id_empleado,
+                        id_periodo,
+                        fecha,
+                        dia,
+                        hora_entrada,
+                        hora_salida,
+                        estado_jornada,
+                        horas_normales_trabajadas,
+                        observaciones
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    id_empleado,
+                    id_periodo,
+                    fecha,
+                    dia,
+                    hora_entrada,
+                    hora_salida,
+                    'Incompleta',
+                    0,
+                    motivo
+                ))
+
+            conn.commit()
+
+    @staticmethod
+    def registrar_incidencia_asistencia(
+            id_empleado,
+            fecha,
+            dia,
+            tipo,
+            descripcion
+    ):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            #corrobar si ya existe o no 
+            cur.execute("""
+            SELECT 1 FROM incidencia_asistencia
+            WHERE id_empleado = %s AND fecha = %s
+            """, (id_empleado, fecha))
+
+            if cur.fetchone():
+                raise ValueError("Ya existe una incidencia registrada para ese empleado en esa fecha.")
+
+            # 2. Obtener o crear el periodo
+            cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
+            id_periodo = cur.fetchone()[0]
+
+            # 3. Insertar en incidencia_asistencia
+            cur.execute("""
+                INSERT INTO incidencia_asistencia (
+                    id_empleado,
+                    id_periodo,
+                    fecha,
+                    dia,
+                    tipo,
+                    descripcion
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                id_empleado,
+                id_periodo,
+                fecha,
+                dia,
+                tipo,
+                descripcion
+            ))
+
+            conn.commit()
+            print("✅ Incidencia en asistencia registrada correctamente")
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print("❌ Error al registrar incidencia:", e)
+            raise e
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+    
+    @staticmethod
+    def registrar_asistencia_biometrica(
+        id_empleado,
+        fecha,
+        tipo,
+        hora,
+        estado_asistencia,
+        turno_asistencia  
+    ):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            
+            #corrobar si ya existe o no 
+            cur.execute("""
+            SELECT 1 FROM asistencia_biometrica
+            WHERE id_empleado = %s AND fecha = %s AND tipo = %s
+            """, (id_empleado, fecha,tipo))
+
+            if cur.fetchone():
+                raise ValueError(f"Ya existe una asistencia registrada de tipo {tipo} para ese empleado en esa fecha.")
+
+            # 2. Obtener o crear el periodo
+            cur.execute("SELECT obtener_o_crear_periodo_empleado(%s, %s);", (id_empleado, fecha))
+            id_periodo = cur.fetchone()[0]
+            
+            #obtenemos el puesto
+            cur.execute("SELECT id_puesto FROM informacion_laboral WHERE id_empleado= %s;", (id_empleado,))
+            puesto_resultado = cur.fetchone()
+            if not puesto_resultado:
+                raise ValueError("El empleado no tiene información laboral registrada.")
+            id_puesto = puesto_resultado[0]
+
+
+            # 3. Insertar en incidencia_asistencia
+            cur.execute("""
+            INSERT INTO asistencia_biometrica (
+            id_empleado,
+            id_periodo,
+            id_puesto,
+            fecha,
+            tipo,
+            hora,
+            estado_asistencia,
+            turno_asistencia
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            id_empleado,
+            id_periodo,
+            id_puesto,
+            fecha,
+            tipo,
+            hora,
+            estado_asistencia,
+            turno_asistencia
+        ))
+
+            conn.commit()
+            print("✅ asistencia biometrica registrada correctamente")
+
+        except Exception as e:
+            if 'conn' in locals():
+                conn.rollback()
+            print("❌ Error al registrar asistencia biometrica:", e)
+            raise e
+
+        finally:
+            if 'cur' in locals():
+                cur.close()
+            if 'conn' in locals():
+                conn.close()
+        

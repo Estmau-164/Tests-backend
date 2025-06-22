@@ -224,3 +224,62 @@ class CuentaBancariaModificar(BaseModel):
     nombre_banco: str = Field(alias="codigo_banco")
     numero_cuenta: str
     tipo_cuenta: str
+    
+class SalarioInput(BaseModel):
+    puesto_id: int
+    departamento_id: int
+    categoria_id: int
+    valor_por_defecto: float
+    fecha_inicio: str    
+
+class ConceptoInput(BaseModel):
+    descripcion: str
+    tipo_concepto: str
+    valor_por_defecto: Optional[float] = None
+    es_porcentaje: Optional[bool] = False
+
+class ConceptoOutput(BaseModel):
+    codigo: str
+    descripcion: str
+    tipo_concepto: str
+    valor_por_defecto: float | None
+    es_porcentaje: bool
+
+class ConceptoUpdate(BaseModel):
+    descripcion: Optional[str] = None
+    tipo_concepto: Optional[str] = None
+    valor_por_defecto: Optional[float] = None
+    es_porcentaje: Optional[bool] = None
+
+class JornadaRequest(BaseModel):
+    id_empleado: int
+    fecha: date
+    dia: str
+    hora_entrada: time
+    hora_salida: time
+    estado_jornada: str
+    horas_normales_trabajadas: float
+    horas_extra: float
+    motivo: str
+
+class JornadaParcialRequest(BaseModel):
+    id_empleado: int
+    fecha: date
+    hora_entrada: time | None = None
+    hora_salida: time | None = None
+    motivo: str
+
+class IncidenciaAsistenciaRequest(BaseModel):
+    id_empleado: int
+    fecha: date
+    dia: str
+    tipo: str
+    descripcion: str
+    
+class AsistenciaBiometricaRequest(BaseModel):
+    id_empleado: int
+    fecha: date
+    tipo: str
+    hora: time
+    estado_asistencia: str
+    turno_asistencia: str

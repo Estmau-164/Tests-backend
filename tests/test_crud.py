@@ -363,7 +363,7 @@ class TestActualizarDatosEmpleado:
                 "11 5498-3219",
                 "nuevocorreo@gmail.com",
                 "Brasil",
-                "6543",
+                "654a",
                 "Polvorines",
                 "Malvinas Argentinas",
                 "Buenos Aires",
