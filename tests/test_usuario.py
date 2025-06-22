@@ -50,7 +50,7 @@ def obtener_contrasena_usuario(id_usuario):
     return password_hash
 
 
-@pytest.mark.usefixtures("setup_schema")
+@pytest.mark.usefixtures("setup_schema", "cargar_roles")
 class TestCrearUsuario:
 
     def test_crear_usuario_exitoso(self, crear_empleado):
@@ -108,7 +108,7 @@ class TestCrearUsuario:
             Usuario.crear_usuario(id_empleado, 1, "GusGar123", "contrA45!", None)
 
 
-@pytest.mark.usefixtures("setup_schema")
+@pytest.mark.usefixtures("setup_schema", "cargar_roles")
 class TestVerificarContrasena:
 
     def test_verificar_contrasena_exitoso(self, crear_empleado):
