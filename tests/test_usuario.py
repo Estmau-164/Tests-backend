@@ -29,7 +29,7 @@ def crear_empleado():
     return ret
 
 
-def obtener_contrasena_usuario(id_usuario):
+def obtener_contrasena_usuario(id_usuario: int):
     conn = db.get_connection()
     try:
         with conn.cursor() as cur:
