@@ -31,23 +31,26 @@ def crear_empleado():
 
 def obtener_contrasena_usuario(id_usuario):
     conn = db.get_connection()
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT contrasena
-            FROM usuario
-            WHERE id_usuario = %s
-        """,
-            (id_usuario,),
-        )
-        resultado = cur.fetchone()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT contrasena
+                FROM usuario
+                WHERE id_usuario = %s
+            """,
+                (id_usuario,),
+            )
+            resultado = cur.fetchone()
 
-    if resultado is None:
-        raise ValueError(f"Usuario con ID {id_usuario} no encontrado")
+        if resultado is None:
+            raise ValueError(f"Usuario con ID {id_usuario} no encontrado")
 
-    password_hash = resultado[0]
+        password_hash = resultado[0]
 
-    return password_hash
+        return password_hash
+    finally:
+        db.return_connection(conn)
 
 
 @pytest.mark.usefixtures("setup_schema", "cargar_roles")
@@ -126,3 +129,21 @@ class TestVerificarContrasena:
         )
         contrasena_hash = obtener_contrasena_usuario(id_usuario)
         assert Usuario.verificar_password("contrA45", contrasena_hash) == False
+
+
+@pytest.mark.usefixtures("setup_schema", "cargar_roles")
+class TestObtenerUsuario:
+
+    def test_obtener_usuario_exitoso(self, crear_empleado):
+        id_empleado = crear_empleado["id_empleado"]
+        Usuario.crear_usuario(id_empleado, 1, "Flow_123", "contrA45!", None)
+        usuario_obtenido = Usuario.obtener_usuario_por_username("Flow_123")
+        assert id_empleado == usuario_obtenido.id_empleado
+
+    def test_obtener_usuario_inexistente(self, crear_empleado):
+        id_empleado = crear_empleado["id_empleado"]
+        Usuario.crear_usuario(id_empleado, 1, "Flow_123", "contrA45!", None)
+        no_existe_usuario = (
+            True if Usuario.obtener_usuario_por_username("Gar_123") == None else False
+        )
+        assert no_existe_usuario == True

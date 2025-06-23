@@ -27,7 +27,8 @@ from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResp
                       BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest, LoginResponse, LoginResponse,
                       LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput, CuentaBancariaModificar,
                       SalarioInput, ConceptoInput, ConceptoOutput, ConceptoUpdate, JornadaRequest,
-                      JornadaParcialRequest, IncidenciaAsistenciaRequest, AsistenciaBiometricaRequest)
+                      JornadaParcialRequest, IncidenciaAsistenciaRequest, AsistenciaBiometricaRequest,PuestoInput, CategoriaInput,DepartamentoInput,
+                      ConfigAsistenciaUpdate, InformacionLaboral, modificarInformacionLaboral)
 from fastapi import APIRouter, HTTPException
 from crud.database import db
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +38,8 @@ import cloudinary.uploader
 from fastapi import UploadFile, File, Form
 from fastapi.responses import FileResponse
 import traceback
+from utils.correos import generar_codigo_verificacion, enviar_codigo_verificacion
+
 
 
 
@@ -70,11 +73,6 @@ class AsistenciaManual(BaseModel):
     fecha: date
     hora: time
     estado_asistencia: Optional[str] = None
-
-class CalculoNominaRequest(BaseModel):
-    id_empleado: int
-    periodo: str
-    fecha_calculo: str = Field(default_factory=lambda: datetime.now().strftime('%Y-%m-%d'))
 
 
 app = FastAPI()
@@ -156,11 +154,16 @@ def crear_empleado(empleado: EmpleadoBase):
 @app.post("/crear-empleado/")
 def crear_empleado(request: EmpleadoBase):
     try:
-        id_empleado = AdminCRUD.crear_empleado(request)
+
+        #empleado = AdminCRUD.crear_empleado(request)
+
+        # Generar y enviar código solo si se creó bien
+        #codigo = generar_codigo_verificacion()
+        #enviar_codigo_verificacion(empleado['nombre'], empleado['correo_electronico'], codigo)
 
         return {
             "mensaje": "Empleado creado correctamente",
-            "id_empleado": id_empleado
+        #    "id_empleado": empleado
         }
 
     except ValueError as e:
@@ -170,6 +173,7 @@ def crear_empleado(request: EmpleadoBase):
         import traceback
         print("[ERROR] Error inesperado:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 @app.get("/empleados/{numero_identificacion}")
 def obtener_empleado(numero_identificacion: str):
@@ -749,7 +753,8 @@ def agregar_concepto(datos: ConceptoInput):
 
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
-
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
@@ -907,3 +912,223 @@ def registrar_asistencia_biometrica(datos: AsistenciaBiometricaRequest):
     except Exception as e:
         print("❌ Error en endpoint:", e)
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+    
+#PUESTOS
+@app.post("/api/puestos/agregar")
+def agregar_puesto(datos: PuestoInput):
+    try:
+        AdminCRUD.agregar_puesto(datos.nombre)
+        return {"mensaje": "✅ Puesto agregado correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as ve:  
+        raise HTTPException(status_code=409, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@app.get("/api/puestos/")
+def obtener_puestos():
+    try:
+        return AdminCRUD.listar_puestos()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener los puestos")
+
+@app.delete("/api/puestos/{id_puesto}")
+def eliminar_puesto(id_puesto: int):
+    try:
+        AdminCRUD.eliminar_puesto(id_puesto)
+        return {"mensaje": "✅ Puesto eliminado correctamente"}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al eliminar puesto")
+
+#DEPARTAMENTOS
+@app.post("/api/departamentos/agregar")
+def agregar_departamento(datos: DepartamentoInput):
+    try:
+        AdminCRUD.agregar_departamento(datos.nombre, datos.descripcion)
+        return {"mensaje": "✅ Departamento agregado correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as ve:
+        raise HTTPException(status_code=409, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@app.get("/api/departamentos/")
+def obtener_departamentos():
+    try:
+        return AdminCRUD.listar_departamentos()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener los departamentos")
+
+@app.delete("/api/departamentos/{id_departamento}")
+def eliminar_departamento(id_departamento: int):
+    try:
+        AdminCRUD.eliminar_departamento(id_departamento)
+        return {"mensaje": "✅ Departamento eliminado correctamente"}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al eliminar departamento")
+
+#CATEGORIAS  
+@app.post("/api/categorias/agregar")
+def agregar_categoria(datos: CategoriaInput):
+    try:
+        AdminCRUD.agregar_categoria(datos.nombre_categoria)
+        return {"mensaje": "✅ Categoría agregada correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as ve:
+        raise HTTPException(status_code=409, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@app.get("/api/categorias/")
+def obtener_categorias():
+    try:
+        return AdminCRUD.listar_categorias()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener las categorías")
+
+@app.delete("/api/categorias/{id_categoria}")
+def eliminar_categoria(id_categoria: int):
+    try:
+        AdminCRUD.eliminar_categoria(id_categoria)
+        return {"mensaje": "✅ Categoría eliminada correctamente"}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al eliminar categoría")
+
+#configuracion de asistencias
+@app.get("/api/configuracion-asistencia/")
+def obtener_configuracion_asistencia():
+    try:
+        return AdminCRUD.listar_configuraciones_asistencia()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al obtener las configuraciones")
+
+@app.put("/api/configuracion-asistencia/{clave}")
+def actualizar_configuracion_asistencia(clave:str, datos: ConfigAsistenciaUpdate):
+    try:
+        return AdminCRUD.actualizar_configuracion_asistencia(clave,datos.valor)
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al actualizar la configuración")
+    
+#LISTADO DE PAISES, PROVINCIAS Y LOCALIDADES
+@app.get("/api/paises/")
+def listar_paises():
+    try:
+        return AdminCRUD.listar_paises()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al listar países")
+
+@app.get("/api/provincias/")
+def listar_provincias():
+    try:
+        return AdminCRUD.listar_provincias()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al listar provincias")
+
+@app.get("/api/localidades/")
+def listar_localidades():
+    try:
+        return AdminCRUD.listar_localidades()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al listar localidades")
+
+@app.get("/api/partidos/")
+def obtener_partidos():
+    try:
+        return AdminCRUD.listar_partidos()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al obtener partidos")
+
+
+@app.get("/api/partidos-filtrado/")
+def obtener_partidos_por_provincia(codigo_provincia: int = None):
+    try:
+        return AdminCRUD.listar_partidos_por_provincia(codigo_provincia)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener partidos")
+
+
+@app.get("/api/localidades-filtrado/")
+def obtener_localidades_por_provincia(codigo_provincia: int = None):
+    try:
+        return AdminCRUD.listar_localidades_por_provincia(codigo_provincia)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener localidades")
+    
+##Agregar informacion laboral a un empleado
+@app.post("/api/informacion-laboral/agregar")
+def agregar_informacion_laboral(request: InformacionLaboral):
+    try:
+        AdminCRUD.agregar_informacion_laboral(
+            id_empleado=request.id_empleado,
+            id_departamento=request.id_departamento,
+            id_puesto=request.id_puesto,
+            id_categoria=request.id_categoria,
+            fecha_ingreso=request.fecha_ingreso,
+            turno=request.turno,
+            hora_inicio_turno=request.hora_inicio_turno,
+            hora_fin_turno=request.hora_fin_turno,
+            cantidad_horas_trabajo=request.cantidad_horas_trabajo,
+            tipo_contrato=request.tipo_contrato,
+            estado=request.estado,
+            tipo_semana_laboral=request.tipo_semana_laboral
+        )
+        return {"mensaje": "Información laboral registrada correctamente"}
+
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get("/empleados/{id_empleado}/informacion-laboral-completa")
+def obtener_info_laboral_completa(id_empleado: int):
+    try:
+        info = AdminCRUD.buscar_informacion_laboral_completa_por_id_empleado(id_empleado)
+        if info:
+            return {
+                "id_departamento": info[0],
+                "id_puesto": info[1],
+                "id_categoria": info[2],
+                "fecha_ingreso": info[3].strftime('%Y-%m-%d'),  # Fecha en índice 3
+                "turno": info[4],
+                "hora_inicio_turno": str(info[5]),
+                "hora_fin_turno": str(info[6]),
+                "cantidad_horas_trabajo": info[7],
+                "tipo_contrato": info[8],
+                "estado": info[9],
+                "tipo_semana_laboral": info[10]
+                }       
+        raise HTTPException(status_code=404, detail="No encontrado")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/informacion-laboral/modificar")
+def modificar_info_laboral(request: InformacionLaboral):
+    try:
+        AdminCRUD.modificar_informacion_laboral(
+            id_empleado=request.id_empleado,
+            id_departamento=request.id_departamento,
+            id_puesto=request.id_puesto,
+            id_categoria=request.id_categoria,
+            fecha_ingreso=request.fecha_ingreso,
+            turno=request.turno,
+            hora_inicio_turno=request.hora_inicio_turno,
+            hora_fin_turno=request.hora_fin_turno,
+            cantidad_horas_trabajo=request.cantidad_horas_trabajo,
+            tipo_contrato=request.tipo_contrato,
+            estado=request.estado,
+            tipo_semana_laboral=request.tipo_semana_laboral
+        )
+        return {"mensaje": "Información laboral actualizada correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

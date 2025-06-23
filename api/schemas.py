@@ -283,3 +283,33 @@ class AsistenciaBiometricaRequest(BaseModel):
     hora: time
     estado_asistencia: str
     turno_asistencia: str
+    
+class PuestoInput(BaseModel):
+    nombre: str 
+
+
+class DepartamentoInput(BaseModel):
+    nombre: str 
+    descripcion: str 
+
+
+class CategoriaInput(BaseModel):
+    nombre_categoria: str 
+    
+
+class ConfigAsistenciaUpdate(BaseModel):
+    valor: str 
+    
+class InformacionLaboral(BaseModel):
+    id_empleado: int
+    id_departamento: int
+    id_puesto: int
+    id_categoria: int
+    fecha_ingreso: date            
+    turno: str
+    hora_inicio_turno: time        
+    hora_fin_turno: time           
+    cantidad_horas_trabajo: int
+    tipo_contrato: str
+    estado: str
+    tipo_semana_laboral: str
