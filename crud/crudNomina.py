@@ -13,7 +13,7 @@ class NominaCRUD:
         self.db = db
 
     @staticmethod
-    def calcular_nomina(id_empleado: int, periodo_texto: str, fecha_calculo: str, tipo: str):
+    def calcular_nomina(id_usuario: int, id_empleado: int, periodo_texto: str, fecha_calculo: str, tipo: str):
         with db.get_connection() as conn:
             try:
                 conn = db.get_connection()
@@ -60,6 +60,8 @@ class NominaCRUD:
                     raise ValueError("Salario base no encontrado")
                 salario_base = float(salario_base_row[0])
 
+                if tipo.lower() in ["primera quincena", "segunda quincena"]:
+                    salario_base = salario_base / 2
                 # Obtener horas normales trabajadas
                 cur.execute("""
                     SELECT SUM(horas_normales_trabajadas) 
@@ -100,7 +102,7 @@ class NominaCRUD:
                     FROM concepto 
                     WHERE tipo_concepto = 'Deducción'
                 """)
-                descuentos = {desc: float(valor) * salario_base for desc, valor in cur.fetchall()}
+                descuentos = {desc: (float(valor) / 100) * salario_base for desc, valor in cur.fetchall()}
 
                 # Obtener bono presentismo si existe
                 cur.execute("""
@@ -144,6 +146,17 @@ class NominaCRUD:
                 )
 
                 id_nomina = cur.fetchone()[0]
+
+                # Guardamos en logs
+                cur.execute(
+                    """
+                    INSERT INTO log_nomina (id_nomina, id_usuario, accion, detalle)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (id_nomina, id_usuario, 'CREACIÓN',
+                     f'Nómina generada para el periodo {periodo_texto} - tipo {tipo}')
+                )
+
                 conn.commit()
 
                 # Devolver nomina completa
@@ -151,6 +164,8 @@ class NominaCRUD:
                 row = cur.fetchone()
                 columns = [desc[0] for desc in cur.description]
                 nomina_dict = dict(zip(columns, row))
+
+
 
                 # Agregar campo periodo
                 cur.execute("""
@@ -201,7 +216,7 @@ class NominaCRUD:
                 db.return_connection(conn)
 
     @staticmethod
-    def obtener_nominas_empleado(id_empleado: int) -> List[NominaResponse]:
+    def obtener_nominas_empleado(id_empleado: int) -> List[ReciboResponse]:
         """Devuelve todas las nóminas del empleado como Pydantic models"""
         conn = None
         try:
@@ -215,7 +230,7 @@ class NominaCRUD:
                 """, (id_empleado,))
 
             columns = [desc[0] for desc in cur.description]
-            return [NominaResponse(**dict(zip(columns, row))) for row in cur.fetchall()]
+            return [ReciboResponse(**dict(zip(columns, row))) for row in cur.fetchall()]
 
         finally:
             if conn:

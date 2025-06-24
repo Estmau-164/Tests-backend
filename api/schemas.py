@@ -39,6 +39,7 @@ class EmpleadoBase(BaseModel):
         genero: str
         pais_nacimiento: str
         estado_civil: str
+        id_usuario: str
 
 class EmpleadoUpdate(BaseModel):
         telefono: Optional[str] = None
@@ -70,15 +71,42 @@ class NominaResponse(NominaBase):
     sueldo_neto: float
     tipo: str
 
+class ReciboResponse(BaseModel):
+    id_nomina: int
+    nombre: str
+    apellido: str
+    tipo_identificacion: str
+    numero_identificacion: str
+    puesto: str
+    categoria: str
+    departamento: str
+    tipo: str
+    periodo: str
+    fecha_de_pago: date
+    banco: str
+    numero_cuenta: str
+    salario_base: float
+    bono_presentismo: float
+    bono_antiguedad: float
+    horas_extra: float
+    descuento_jubilacion: float
+    descuento_obra_social: float
+    descuento_anssal: float
+    descuento_ley_19032: float
+    impuesto_ganancias: float
+    descuento_sindical: float
+    sueldo_bruto: float
+    sueldo_neto: float
 
 class NominaListResponse(BaseModel):
-    nominas: list[NominaResponse]
+    nominas: list[ReciboResponse]
 
 class CalculoNominaRequest(BaseModel):
     id_empleado: int
     periodo: str
     fecha_calculo: date
     tipo: str
+    id_usuario: int
 
 class EmpleadoNominaRequest(BaseModel):
     id_empleado: int
@@ -203,17 +231,7 @@ class Permisos(BaseModel):
     ver_reportes: bool = False
     cerrar_sesion: bool = False
 
-class ReciboResponse(BaseModel):
-    id_nomina: int
-    nombre: str
-    periodo: str
-    fecha_de_pago: date
-    salario_base: float
-    bono_presentismo: float
-    horas_extra: float
-    descuento_jubilacion: float
-    descuento_obra_social: float
-    sueldo_neto: float
+
 
 class CuentaBancariaInput(BaseModel):
     codigo_banco: str

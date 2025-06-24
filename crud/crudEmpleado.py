@@ -154,8 +154,7 @@ class Empleado:
     @staticmethod
     def borrar_por_id(id_empleado):
         """Elimina un empleado por su ID"""
-        conn = db.get_connection()
-        with conn.cursor() as cur:
+        with db.conn.cursor() as cur:
             try:
                 # Primero verificamos si el empleado existe
                 cur.execute(
@@ -170,11 +169,11 @@ class Empleado:
                     "DELETE FROM empleado WHERE id_empleado = %s",
                     (str(id_empleado),)
                 )
-                conn.commit()
+                db.conn.commit()
                 return True  # Borrado exitoso
 
             except Exception as e:
-                conn.rollback()
+                db.conn.rollback()
                 raise ValueError(f"Error al borrar empleado: {str(e)}")
 
     @staticmethod

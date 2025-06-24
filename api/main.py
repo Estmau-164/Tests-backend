@@ -27,8 +27,9 @@ from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResp
                       BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest, LoginResponse, LoginResponse,
                       LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput, CuentaBancariaModificar,
                       SalarioInput, ConceptoInput, ConceptoOutput, ConceptoUpdate, JornadaRequest,
-                      JornadaParcialRequest, IncidenciaAsistenciaRequest, AsistenciaBiometricaRequest,PuestoInput, CategoriaInput,DepartamentoInput,
-                      ConfigAsistenciaUpdate, InformacionLaboral, modificarInformacionLaboral)
+                      JornadaParcialRequest, IncidenciaAsistenciaRequest, AsistenciaBiometricaRequest, PuestoInput,
+                      CategoriaInput, DepartamentoInput,
+                      ConfigAsistenciaUpdate, InformacionLaboral, ReciboResponse)
 from fastapi import APIRouter, HTTPException
 from crud.database import db
 from fastapi.middleware.cors import CORSMiddleware
@@ -150,20 +151,20 @@ def crear_empleado(empleado: EmpleadoBase):
         raise HTTPException(status_code=400, detail=str(e))
 """
 
-
 @app.post("/crear-empleado/")
 def crear_empleado(request: EmpleadoBase):
     try:
 
-        #empleado = AdminCRUD.crear_empleado(request)
+        empleado = AdminCRUD.crear_empleado(request)
 
         # Generar y enviar código solo si se creó bien
-        #codigo = generar_codigo_verificacion()
-        #enviar_codigo_verificacion(empleado['nombre'], empleado['correo_electronico'], codigo)
+        codigo = generar_codigo_verificacion()
+        enviar_codigo_verificacion(empleado['nombre'], empleado['correo_electronico'], codigo)
 
         return {
             "mensaje": "Empleado creado correctamente",
-        #    "id_empleado": empleado
+            "id_empleado": empleado,
+            "codigo": codigo
         }
 
     except ValueError as e:
@@ -413,6 +414,7 @@ async def actualizar_registro_horario(
 @app.patch("/empleados/{empleado_id}/datos-personales", response_model=EmpleadoBase)
 async def actualizar_datos_personales(
         empleado_id: int,
+        id_usuario: int,
         datos: EmpleadoUpdate
 ):
     """
@@ -431,6 +433,7 @@ async def actualizar_datos_personales(
         # Llamada a tu función CRUD existente
         empleado_actualizado = AdminCRUD.actualizar_datos_personales2(
             id_empleado=empleado_id,
+            id_usuario=id_usuario,
             **campos_actualizar
         )
 
@@ -480,7 +483,7 @@ async def cargar_imagen(image: UploadFile = File(...), usuario_id: int = Form(..
 #NOMINAS----------------------------------------------------------------------------------------
 
 # Obtener última nómina de un empleado (GET)
-@app.get("/nominas/empleado/{id_empleado}/ultima", response_model=NominaResponse)
+@app.get("/nominas/empleado/{id_empleado}/ultima", response_model=ReciboResponse)
 async def obtener_ultima_nomina_empleado(id_empleado: int):
     try:
         nominas = NominaCRUD.obtener_nominas_empleado(id_empleado)
@@ -526,7 +529,7 @@ async def buscar_nominas_empleado(
 
 
 # Obtener nómina específica por ID (GET)
-@app.get("/nominas/{id_nomina}", response_model=NominaResponse)
+@app.get("/nominas/{id_nomina}", response_model=ReciboResponse)
 async def obtener_nomina(id_nomina: int):
     try:
         nomina = NominaCRUD.obtener_nomina(id_nomina)
@@ -541,10 +544,12 @@ async def obtener_nomina(id_nomina: int):
 async def calcular_nomina_endpoint(request: CalculoNominaRequest):
     try:
         return NominaCRUD.calcular_nomina(
+            id_usuario=request.id_usuario,
             id_empleado=request.id_empleado,
             periodo_texto=request.periodo,
             fecha_calculo=request.fecha_calculo,
             tipo=request.tipo
+
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -610,6 +615,13 @@ def descargar_recibo(id_nomina: int):
         media_type='application/pdf',
         filename=f"recibo_{id_nomina}.pdf"
     )
+@app.get("/periodos-unicos/")
+def listar_periodos_unicos():
+    try:
+        periodos = AdminCRUD.obtener_periodos_unicos()
+        return {"periodos": periodos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 #user--------------------------------------------------------------
 
@@ -1132,3 +1144,23 @@ def modificar_info_laboral(request: InformacionLaboral):
         return {"mensaje": "Información laboral actualizada correctamente"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/habilitar-cuenta")
+def habilitar_cuenta(id_empleado: int):
+    try:
+        AdminCRUD.habilitar_cuenta(id_empleado)
+        return {"mensaje": f"Cuenta del empleado {id_empleado} habilitada correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al habilitar la cuenta")
+
+@app.get("/periodos-unicos/", response_model=list[str])
+def listar_periodos_unicos():
+    try:
+        periodos = AdminCRUD.obtener_periodos_unicos()
+        return periodos
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
