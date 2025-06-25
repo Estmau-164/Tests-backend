@@ -11,11 +11,12 @@ import cloudinary.uploader
 from cloudinary.uploader import upload as cloudinary_upload
 import io
 from crud import validacion_entrada
+from auth.utils import registrar_evento_sistema
 
 class AdminCRUD:
 
     @staticmethod
-    def crear_empleado(nuevo_empleado):
+    def crear_empleado(id_usuario: int,nuevo_empleado):
         conn = None
         try:
             conn = db.get_connection()
@@ -53,6 +54,15 @@ class AdminCRUD:
             )
 
             resultado = cur.fetchone()
+
+            # Registrar evento en evento_sistema
+            cur.execute(
+                """
+                INSERT INTO evento_sistema (id_usuario, tipo_evento, descripcion)
+                VALUES (%s, %s, %s)
+                """,
+                (id_usuario, 'Otro', f'Se creó el empleado {resultado[1]} {resultado[2]} (ID: {resultado[0]})')
+            )
             conn.commit()
 
             return {
@@ -77,12 +87,20 @@ class AdminCRUD:
         except Exception as e:
             if conn:
                 conn.rollback()
+                try:
+                    registrar_evento_sistema(
+                        conn,
+                        id_usuario=id_usuario,
+                        tipo_evento="Otro",
+                        descripcion=f"Error al crear empleado: {str(e)}"
+                    )
+                    conn.commit()
+                except Exception as log_error:
+                    print(f"[ERROR] Fallo al registrar log: {log_error}")
             print(f"[ERROR] Error al crear empleado: {e}")
             raise
 
         finally:
-            if cur:
-                cur.close()
             if conn:
                 conn.close()
 
@@ -165,6 +183,27 @@ class AdminCRUD:
                 db.return_connection(conn)
 
     @staticmethod
+    def habilitar_cuenta(id_empleado: int):
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE usuario
+                SET esta_activo = TRUE,
+                    fecha_activacion = %s
+                WHERE id_empleado = %s
+                """,
+                (date.today(), id_empleado)
+            )
+            if cur.rowcount == 0:
+                raise ValueError("No se encontró el usuario con ese ID de empleado")
+            conn.commit()
+        finally:
+            if conn:
+                db.return_connection(conn)
+
+    @staticmethod
     def obtener_empleado():
         """Lista todos los empleados con información básica"""
         try:
@@ -189,6 +228,37 @@ class AdminCRUD:
                 }
                 for row in cur.fetchall()
             ]
+        finally:
+            if conn:
+                db.return_connection(conn)
+
+    @staticmethod
+    def obtener_empleado_por_id(id_empleado):
+        """Obtiene la información básica de un empleado por su ID"""
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id_empleado, numero_identificacion, nombre, apellido,
+                       correo_electronico, telefono, imagen_perfil_url
+                FROM empleado
+                WHERE id_empleado = %s
+                """,
+                (id_empleado,)
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "id_empleado": row[0],
+                    "numero_identificacion": row[1],
+                    "nombre": row[2],
+                    "apellido": row[3],
+                    "correo": row[4],
+                    "telefono": row[5],
+                    "imagen_perfil_url": row[6]
+                }
+            return None
         finally:
             if conn:
                 db.return_connection(conn)
@@ -633,7 +703,7 @@ class AdminCRUD:
 
 
     @staticmethod
-    def actualizar_datos_personales2(id_empleado: int, telefono: str = None,
+    def actualizar_datos_personales2(id_usuario:int, id_empleado: int, telefono: str = None,
                                     correo_electronico: str = None, calle: str = None,
                                     numero_calle: str = None, localidad: str = None,
                                     partido: str = None, provincia: str = None):
@@ -665,6 +735,16 @@ class AdminCRUD:
             # Construir la consulta dinámicamente basada en los parámetros proporcionados
             updates = []
             params = []
+
+            validacion_entrada.validar_actualizar_datos_empleado(
+                telefono,
+                correo_electronico,
+                calle,
+                numero_calle,
+                localidad,
+                partido,
+                provincia
+            )
 
             if telefono is not None:
                 updates.append("telefono = %s")
@@ -698,15 +778,6 @@ class AdminCRUD:
                 params.append(partido)
 
             if provincia is not None:
-                # Validar provincia
-                provincias_validas = ['Buenos Aires', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba',
-                                      'Corrientes', 'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa',
-                                      'La Rioja', 'Mendoza', 'Misiones', 'Neuquén', 'Río Negro',
-                                      'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe',
-                                      'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
-                                      'Ciudad Autónoma de Buenos Aires']
-                if provincia not in provincias_validas:
-                    raise ValueError(f"Provincia inválida. Opciones válidas: {provincias_validas}")
                 updates.append("provincia = %s")
                 params.append(provincia)
 
@@ -726,6 +797,16 @@ class AdminCRUD:
             if cur.rowcount == 0:
                 raise ValueError("No se encontró el empleado con el ID proporcionado")
             print(f"[DEBUG] Tipo de conn: {type(conn)}")
+
+            # Registrar evento en la tabla evento_sistema
+            cur.execute("""
+                INSERT INTO evento_sistema (id_usuario, tipo_evento, descripcion)
+                VALUES (%s, %s, %s)
+            """, (
+                id_usuario,
+                'Otro',
+                f'Datos personales actualizados para empleado ID {id_empleado}'
+            ))
             conn.commit()
             return Empleado.obtener_por_id(id_empleado)
         finally:
@@ -912,8 +993,16 @@ class AdminCRUD:
         if tipo_concepto not in conceptos_validos:
             raise ValueError(f"Tipo de concepto inválido: {tipo_concepto}")
 
-        with db.get_connection() as conn:
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
             cur = conn.cursor()
+
+            # Corrobar si ya existe el concepto con ese nombre
+            cur.execute("SELECT 1 FROM concepto WHERE descripcion = %s", (descripcion,))
+            if cur.fetchone():
+                raise ValueError("Ya existe un concepto agregado con dicho nombre.")
 
             # Obtener último código insertado
             cur.execute("SELECT codigo FROM concepto WHERE codigo LIKE 'C%' ORDER BY codigo DESC LIMIT 1")
@@ -924,13 +1013,23 @@ class AdminCRUD:
             else:
                 nuevo_codigo = "C001"
 
-            # Insertar el nuevo concepto
-            cur.execute("""
-                INSERT INTO concepto (codigo, descripcion, tipo_concepto, valor_por_defecto, es_porcentaje)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (nuevo_codigo, descripcion, tipo_concepto, valor_por_defecto, es_porcentaje))
-
+            # Insertar nuevo concepto
+            cur.execute(
+                "INSERT INTO concepto (codigo, descripcion, tipo_concepto, valor_por_defecto, es_porcentaje) VALUES (%s, %s, %s, %s, %s)",
+                (nuevo_codigo, descripcion, tipo_concepto, valor_por_defecto, es_porcentaje)
+            )
             conn.commit()
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise e
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
     @staticmethod
     def listar_conceptos():
@@ -1405,4 +1504,558 @@ class AdminCRUD:
                 cur.close()
             if 'conn' in locals():
                 conn.close()
-        
+
+#METODOS para listar, obtener y eliminar categorias, puestos, departamentos
+  # ----------- PUESTO -----------
+
+    @staticmethod
+    def agregar_puesto(nombre: str):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM puesto WHERE nombre = %s", (nombre,))
+            if cur.fetchone():
+                raise ValueError("Ya existe un puesto con ese nombre.")
+            cur.execute("INSERT INTO puesto (nombre) VALUES (%s)", (nombre,))
+            conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise e
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def listar_puestos():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT id_puesto, nombre FROM puesto ORDER BY id_puesto ASC")
+            rows = cur.fetchall()
+            return [{"id_puesto": row[0], "nombre": row[1]} for row in rows]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def eliminar_puesto(id_puesto: int):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM puesto WHERE id_puesto = %s", (id_puesto,))
+            if not cur.fetchone():
+                raise ValueError("El puesto no existe.")
+            cur.execute("DELETE FROM puesto WHERE id_puesto = %s", (id_puesto,))
+            conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise e
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+ # ----------- DEPARTAMENTO -----------
+
+    @staticmethod
+    def agregar_departamento(nombre: str, descripcion: str):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+
+            cur.execute("SELECT 1 FROM departamento WHERE nombre = %s", (nombre,))
+            if cur.fetchone():
+                raise ValueError("Ya existe un departamento con ese nombre.")
+
+            cur.execute(
+                "INSERT INTO departamento (nombre, descripcion) VALUES (%s, %s)",
+                (nombre, descripcion)
+            )
+            conn.commit()
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise e
+
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def listar_departamentos():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT id_departamento, nombre, descripcion FROM departamento ORDER BY id_departamento ASC")
+            rows = cur.fetchall()
+            return [{"id_departamento": row[0], "nombre": row[1], "descripcion": row[2]} for row in rows]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def eliminar_departamento(id_departamento: int):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM departamento WHERE id_departamento = %s", (id_departamento,))
+            if not cur.fetchone():
+                raise ValueError("El departamento no existe.")
+            cur.execute("DELETE FROM departamento WHERE id_departamento = %s", (id_departamento,))
+            conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise e
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+   # ----------- CATEGORIA -----------
+
+    @staticmethod
+    def agregar_categoria(nombre_categoria: str):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM categoria WHERE nombre_categoria = %s", (nombre_categoria,))
+            if cur.fetchone():
+                raise ValueError("Ya existe una categoría con ese nombre.")
+            cur.execute("INSERT INTO categoria (nombre_categoria) VALUES (%s)", (nombre_categoria,))
+            conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise e
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def listar_categorias():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT id_categoria, nombre_categoria FROM categoria ORDER BY id_categoria ASC")
+            rows = cur.fetchall()
+            return [{"id_categoria": row[0], "nombre_categoria": row[1]} for row in rows]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def eliminar_categoria(id_categoria: int):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM categoria WHERE id_categoria = %s", (id_categoria,))
+            if not cur.fetchone():
+                raise ValueError("La categoría no existe.")
+            cur.execute("DELETE FROM categoria WHERE id_categoria = %s", (id_categoria,))
+            conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise e
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+#configuracion de asistencias
+    @staticmethod
+    def listar_configuraciones_asistencia():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT clave, valor, descripcion FROM configuracion_asistencia ORDER BY clave ASC")
+            rows = cur.fetchall()
+            return [{"clave": row[0], "valor": str(row[1]), "descripcion": row[2]} for row in rows]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+                
+    @staticmethod
+    def actualizar_configuracion_asistencia(clave: str, nuevo_valor: str):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+
+            cur.execute("SELECT 1 FROM configuracion_asistencia WHERE clave = %s", (clave,))
+            if not cur.fetchone():
+                raise ValueError("Configuración no encontrada")
+
+            cur.execute("UPDATE configuracion_asistencia SET valor = %s WHERE clave = %s", (nuevo_valor, clave))
+            conn.commit()
+            return {"mensaje": "Configuración actualizada"}
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+#Localidades, partidos, paises y provincias
+    @staticmethod
+    def listar_paises():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT codigo_pais, nombre FROM pais ORDER BY nombre ASC")
+            rows = cur.fetchall()
+            return [{"codigo_pais": row[0], "nombre": row[1]} for row in rows]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def listar_provincias():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT codigo_provincia, nombre FROM provincia ORDER BY nombre ASC")
+            rows = cur.fetchall()
+            return [{"codigo_provincia": row[0], "nombre": row[1]} for row in rows]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def listar_localidades():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT codigo_localidad, codigo_provincia, nombre FROM localidad ORDER BY nombre ASC")
+            rows = cur.fetchall()
+            return [
+                {"codigo_localidad": row[0], "codigo_provincia": row[1], "nombre": row[2]}
+                for row in rows
+            ]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+                
+    @staticmethod
+    def listar_partidos():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT codigo_partido, codigo_provincia, nombre FROM partido ORDER BY nombre ASC")
+            rows = cur.fetchall()
+            return [
+                {"codigo_partido": row[0], "codigo_provincia": row[1], "nombre": row[2]}
+                for row in rows
+            ]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def listar_partidos_por_provincia(codigo_provincia: int = None):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            if codigo_provincia is None:
+                cur.execute("SELECT codigo_partido, codigo_provincia, nombre FROM partido ORDER BY nombre")
+            else:
+                cur.execute(
+                    "SELECT codigo_partido, codigo_provincia, nombre FROM partido WHERE codigo_provincia = %s ORDER BY nombre",
+                    (codigo_provincia,)
+                )
+            filas = cur.fetchall()
+            return [
+                {
+                    "codigo_partido": fila[0],
+                    "codigo_provincia": fila[1],
+                    "nombre": fila[2],
+                }
+                for fila in filas
+            ]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def listar_localidades_por_provincia(codigo_provincia: int = None):
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            if codigo_provincia is None:
+                cur.execute(
+                    "SELECT codigo_localidad, codigo_provincia, nombre FROM localidad ORDER BY nombre"
+                )
+            else:
+                cur.execute(
+                    "SELECT codigo_localidad, codigo_provincia, nombre FROM localidad WHERE codigo_provincia = %s ORDER BY nombre",
+                    (codigo_provincia,),
+                )
+            filas = cur.fetchall()
+            return [
+                {
+                    "codigo_localidad": fila[0],
+                    "codigo_provincia": fila[1],
+                    "nombre": fila[2],
+                }
+                for fila in filas
+            ]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+##Agregar informacion laboral
+    @staticmethod
+    def agregar_informacion_laboral(
+        id_empleado: int,
+        id_departamento: int,
+        id_puesto: int,
+        id_categoria: int,
+        fecha_ingreso: str,
+        turno: str,
+        hora_inicio_turno: str,
+        hora_fin_turno: str,
+        cantidad_horas_trabajo: int,
+        tipo_contrato: str,
+        estado: str,
+        tipo_semana_laboral: str
+    ):
+        try:
+            with db.get_connection() as conn:
+                cur = conn.cursor()
+
+                # Verificar si el empleado ya tiene información laboral registrada
+                cur.execute("SELECT 1 FROM informacion_laboral WHERE id_empleado = %s", (id_empleado,))
+                if cur.fetchone():
+                    raise ValueError("El empleado ya tiene información laboral registrada.")
+
+                # Insertar la nueva información
+                cur.execute("""
+                    INSERT INTO informacion_laboral (
+                        id_empleado,
+                        id_departamento,
+                        id_puesto,
+                        id_categoria,
+                        fecha_ingreso,
+                        turno,
+                        hora_inicio_turno,
+                        hora_fin_turno,
+                        cantidad_horas_trabajo,
+                        tipo_contrato,
+                        estado,
+                        tipo_semana_laboral
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    id_empleado,
+                    id_departamento,
+                    id_puesto,
+                    id_categoria,
+                    fecha_ingreso,
+                    turno,
+                    hora_inicio_turno,
+                    hora_fin_turno,
+                    cantidad_horas_trabajo,
+                    tipo_contrato,
+                    estado,
+                    tipo_semana_laboral
+                ))
+
+                conn.commit()
+                return {"mensaje": "Información laboral registrada correctamente"}
+
+        except Exception as e:
+            if 'conn' in locals():
+                conn.rollback()
+            print("❌ Error al agregar informaicon laboral:", e)
+            raise e
+
+        finally:
+            if 'cur' in locals():
+                cur.close()
+            if 'conn' in locals():
+                conn.close()
+
+    @staticmethod
+    def buscar_informacion_laboral_completa_por_id_empleado(id_empleado: int):
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            query = """
+                SELECT 
+                    il.id_departamento,
+                    il.id_puesto,
+                    il.id_categoria,
+                    il.fecha_ingreso,
+                    il.turno,
+                    il.hora_inicio_turno,
+                    il.hora_fin_turno,
+                    il.cantidad_horas_trabajo,
+                    il.tipo_contrato,
+                    il.estado,
+                    il.tipo_semana_laboral
+                FROM informacion_laboral il
+                WHERE il.id_empleado = %s
+                ORDER BY il.fecha_ingreso DESC
+                LIMIT 1
+            """
+            cur.execute(query, (id_empleado,))
+            return cur.fetchone()
+
+        except Exception as e:
+            print(f"Error al buscar información laboral completa: {str(e)}")
+            raise ValueError(f"No se pudo obtener la información laboral completa: {str(e)}")
+        finally:
+            if conn:
+                db.return_connection(conn)
+
+    @staticmethod
+    def modificar_informacion_laboral(
+        id_empleado: int,
+        id_departamento: int,
+        id_puesto: int,
+        id_categoria: int,
+        fecha_ingreso: date,
+        turno: str,
+        hora_inicio_turno: time,
+        hora_fin_turno: time,
+        cantidad_horas_trabajo: int,
+        tipo_contrato: str,
+        estado: str,
+        tipo_semana_laboral: str
+    ):
+        try:
+            with db.get_connection() as conn:
+                cur = conn.cursor()
+
+                # Verificar que exista información laboral para este empleado
+                cur.execute("SELECT 1 FROM informacion_laboral WHERE id_empleado = %s", (id_empleado,))
+                if not cur.fetchone():
+                    raise ValueError("No se encontró información laboral registrada para este empleado.")
+
+                # Actualizar la información laboral
+                cur.execute("""
+                    UPDATE informacion_laboral
+                    SET
+                        id_departamento = %s,
+                        id_puesto = %s,
+                        id_categoria = %s,
+                        fecha_ingreso = %s,
+                        turno = %s,
+                        hora_inicio_turno = %s,
+                        hora_fin_turno = %s,
+                        cantidad_horas_trabajo = %s,
+                        tipo_contrato = %s,
+                        estado = %s,
+                        tipo_semana_laboral = %s
+                    WHERE id_empleado = %s
+                """, (
+                    id_departamento,
+                    id_puesto,
+                    id_categoria,
+                    fecha_ingreso,
+                    turno,
+                    hora_inicio_turno,
+                    hora_fin_turno,
+                    cantidad_horas_trabajo,
+                    tipo_contrato,
+                    estado,
+                    tipo_semana_laboral,
+                    id_empleado
+                ))
+
+                conn.commit()
+                return {"mensaje": "Información laboral actualizada correctamente"}
+
+        except Exception as e:
+            if 'conn' in locals():
+                conn.rollback()
+            print("❌ Error al modificar información laboral:", e)
+            raise e
+
+        finally:
+            if 'cur' in locals():
+                cur.close()
+            if 'conn' in locals():
+                conn.close()
+
+    @staticmethod
+    def obtener_periodos_unicos():
+        conn = None
+        cur = None
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT DISTINCT periodo_texto
+                FROM periodo_empleado
+                ORDER BY periodo_texto
+            """)
+            rows = cur.fetchall()
+            return [row[0] for row in rows]
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()

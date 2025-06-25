@@ -5,7 +5,7 @@ from pydantic import field_validator
 #import face_recognition
 import numpy as np
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Response
 
 from auth.jwt import crear_token
 from crud import crudEmpleado, crudAdmintrador
@@ -27,7 +27,9 @@ from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResp
                       BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest, LoginResponse, LoginResponse,
                       LoginRequest, RegistroUpdate, CrearUsuarioRequest, CuentaBancariaInput, CuentaBancariaModificar,
                       SalarioInput, ConceptoInput, ConceptoOutput, ConceptoUpdate, JornadaRequest,
-                      JornadaParcialRequest, IncidenciaAsistenciaRequest, AsistenciaBiometricaRequest)
+                      JornadaParcialRequest, IncidenciaAsistenciaRequest, AsistenciaBiometricaRequest, PuestoInput,
+                      CategoriaInput, DepartamentoInput,
+                      ConfigAsistenciaUpdate, InformacionLaboral, ReciboResponse)
 from fastapi import APIRouter, HTTPException
 from crud.database import db
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +39,13 @@ import cloudinary.uploader
 from fastapi import UploadFile, File, Form
 from fastapi.responses import FileResponse
 import traceback
+from utils.correos import generar_codigo_verificacion, enviar_codigo_verificacion
+from weasyprint import HTML
+from jinja2 import Environment, FileSystemLoader
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from num2words import num2words
+
 
 
 
@@ -70,11 +79,6 @@ class AsistenciaManual(BaseModel):
     fecha: date
     hora: time
     estado_asistencia: Optional[str] = None
-
-class CalculoNominaRequest(BaseModel):
-    id_empleado: int
-    periodo: str
-    fecha_calculo: str = Field(default_factory=lambda: datetime.now().strftime('%Y-%m-%d'))
 
 
 app = FastAPI()
@@ -152,15 +156,22 @@ def crear_empleado(empleado: EmpleadoBase):
         raise HTTPException(status_code=400, detail=str(e))
 """
 
-
 @app.post("/crear-empleado/")
 def crear_empleado(request: EmpleadoBase):
     try:
-        id_empleado = AdminCRUD.crear_empleado(request)
+        # Asegurate que el modelo `EmpleadoBase` tenga el campo `id_usuario`
+        id_usuario = request.id_usuario
+
+        empleado = AdminCRUD.crear_empleado(id_usuario=id_usuario, nuevo_empleado=request)
+
+        # Generar y enviar código solo si se creó bien
+        codigo = generar_codigo_verificacion()
+        enviar_codigo_verificacion(empleado['nombre'], empleado['correo_electronico'], codigo)
 
         return {
             "mensaje": "Empleado creado correctamente",
-            "id_empleado": id_empleado
+            "id_empleado": empleado,
+            "codigo": codigo
         }
 
     except ValueError as e:
@@ -170,6 +181,7 @@ def crear_empleado(request: EmpleadoBase):
         import traceback
         print("[ERROR] Error inesperado:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 @app.get("/empleados/{numero_identificacion}")
 def obtener_empleado(numero_identificacion: str):
@@ -256,6 +268,7 @@ def actualizar_datos_empleado(
 ):
     try:
         empleado_actualizado = AdminCRUD.actualizar_datos_personales2(
+            id_usuario=datos.id_usuario,
             id_empleado=empleado_id,
             telefono=datos.telefono,
             correo_electronico=datos.correo_electronico,
@@ -409,6 +422,7 @@ async def actualizar_registro_horario(
 @app.patch("/empleados/{empleado_id}/datos-personales", response_model=EmpleadoBase)
 async def actualizar_datos_personales(
         empleado_id: int,
+        id_usuario: int,
         datos: EmpleadoUpdate
 ):
     """
@@ -427,6 +441,7 @@ async def actualizar_datos_personales(
         # Llamada a tu función CRUD existente
         empleado_actualizado = AdminCRUD.actualizar_datos_personales2(
             id_empleado=empleado_id,
+            id_usuario=id_usuario,
             **campos_actualizar
         )
 
@@ -476,7 +491,7 @@ async def cargar_imagen(image: UploadFile = File(...), usuario_id: int = Form(..
 #NOMINAS----------------------------------------------------------------------------------------
 
 # Obtener última nómina de un empleado (GET)
-@app.get("/nominas/empleado/{id_empleado}/ultima", response_model=NominaResponse)
+@app.get("/nominas/empleado/{id_empleado}/ultima", response_model=ReciboResponse)
 async def obtener_ultima_nomina_empleado(id_empleado: int):
     try:
         nominas = NominaCRUD.obtener_nominas_empleado(id_empleado)
@@ -522,7 +537,7 @@ async def buscar_nominas_empleado(
 
 
 # Obtener nómina específica por ID (GET)
-@app.get("/nominas/{id_nomina}", response_model=NominaResponse)
+@app.get("/nominas/{id_nomina}", response_model=ReciboResponse)
 async def obtener_nomina(id_nomina: int):
     try:
         nomina = NominaCRUD.obtener_nomina(id_nomina)
@@ -537,10 +552,12 @@ async def obtener_nomina(id_nomina: int):
 async def calcular_nomina_endpoint(request: CalculoNominaRequest):
     try:
         return NominaCRUD.calcular_nomina(
+            id_usuario=request.id_usuario,
             id_empleado=request.id_empleado,
             periodo_texto=request.periodo,
             fecha_calculo=request.fecha_calculo,
             tipo=request.tipo
+
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -607,6 +624,117 @@ def descargar_recibo(id_nomina: int):
         filename=f"recibo_{id_nomina}.pdf"
     )
 
+# Configurar motor de plantillas
+TEMPLATE_DIR = os.path.join(os.getcwd(), "utils")
+env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+
+@app.get("/empleados/{id_empleado}/recibos/{id_nomina}/descargar")
+def generar_recibo_pdf(id_empleado: int, id_nomina: int):
+    conn = None
+    try:
+        conn = db.get_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # 1. Obtener datos del recibo desde la vista
+        cur.execute("""
+            SELECT * FROM recibo_sueldo
+            WHERE id_empleado = %s AND id_nomina = %s
+        """, (id_empleado, id_nomina))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Recibo no encontrado")
+
+        # 2. Fecha de ingreso
+        cur.execute("""
+            SELECT fecha_ingreso
+            FROM informacion_laboral
+            WHERE id_empleado = %s
+        """, (id_empleado,))
+        ingreso = cur.fetchone()
+        fecha_ingreso = ingreso["fecha_ingreso"] if ingreso else "No disponible"
+
+        # 3. Conceptos base
+        cur.execute("""
+            SELECT codigo, descripcion, tipo_concepto, valor_por_defecto
+            FROM concepto
+        """)
+        conceptos_base = cur.fetchall()
+
+        salario_base = float(row["salario_base"])
+        conceptos = []
+        total_deducciones = 0
+        total_haberes = salario_base
+
+        for concepto in conceptos_base:
+            porcentaje = float(concepto["valor_por_defecto"])
+            monto = round(salario_base * porcentaje / 100, 2)
+            conceptos.append({
+                "codigo": concepto["codigo"],
+                "descripcion": concepto["descripcion"],
+                "cantidad": f"{porcentaje:.2f}%",
+                "haber": monto if concepto["tipo_concepto"] == "Remunerativo" else 0,
+                "deduccion": monto if concepto["tipo_concepto"] == "Deducción" else 0,
+            })
+            if concepto["tipo_concepto"] == "Deducción":
+                total_deducciones += monto
+
+        # 4. Conceptos adicionales
+        conceptos += [
+            {"codigo": "X01", "descripcion": "Bono Presentismo", "cantidad": "1", "haber": row["bono_presentismo"], "deduccion": 0},
+            {"codigo": "X02", "descripcion": "Bono Antigüedad", "cantidad": "1", "haber": row["bono_antiguedad"], "deduccion": 0},
+            {"codigo": "X03", "descripcion": "Horas Extra", "cantidad": "1", "haber": row["horas_extra"], "deduccion": 0},
+        ]
+        total_haberes += float(row["bono_presentismo"] or 0)
+        total_haberes += float(row["bono_antiguedad"] or 0)
+        total_haberes += float(row["horas_extra"] or 0)
+
+        sueldo_neto = total_haberes - total_deducciones
+
+        # 5. Renderizar HTML
+        template = env.get_template("recibo_template.html")
+        html_rendered = template.render(
+            id_empleado=row["id_empleado"],
+            nombre=row["nombre"],
+            apellido=row["apellido"],
+            tipo_identificacion=row["tipo_identificacion"],
+            numero_identificacion=row["numero_identificacion"],
+            puesto=row["puesto"],
+            categoria=row["categoria"],
+            departamento=row["departamento"],
+            fecha_ingreso=fecha_ingreso,
+            periodo=row["periodo"],
+            fecha_de_pago=row["fecha_de_pago"],
+            banco=row["banco"],
+            numero_cuenta=row["numero_cuenta"],
+            salario_base=salario_base,
+            sueldo_bruto=total_haberes,
+            total_deducciones=total_deducciones,
+            sueldo_neto=sueldo_neto,
+            sueldo_neto_texto=num2words(sueldo_neto, lang='es').capitalize(),
+            conceptos=conceptos
+        )
+
+        pdf = HTML(string=html_rendered, base_url=os.getcwd()).write_pdf()
+        return Response(content=pdf, media_type="application/pdf", headers={
+            "Content-Disposition": f"inline; filename=recibo_{id_nomina}.pdf"
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
+
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.get("/periodos-unicos/")
+def listar_periodos_unicos():
+    try:
+        periodos = AdminCRUD.obtener_periodos_unicos()
+        return {"periodos": periodos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 #user--------------------------------------------------------------
 
 @app.post("/login", response_model=LoginResponse)
@@ -626,6 +754,9 @@ def login(request: LoginRequest):
     if id_rol is None:
         raise HTTPException(status_code=404, detail="Rol no asignado al empleado")
 
+    # Obtener el id_empleado
+    id_usuario = usuario.id_usuario
+
     #  Obtener permisos desde tabla rol
     permisos = Usuario.obtener_permisos_por_id_rol(id_rol)
     numero_identificacion = AdminCRUD.obtener_numero_identificacion(usuario.id_empleado)
@@ -635,7 +766,8 @@ def login(request: LoginRequest):
         "sub": usuario.nombre_usuario,
         "id_empleado": usuario.id_empleado,
         "id_rol": id_rol,
-        "permisos": permisos.model_dump()
+        "permisos": permisos.model_dump(),
+        "id_usuario": id_usuario
     }
 
     token = crear_token(token_data)
@@ -646,7 +778,8 @@ def login(request: LoginRequest):
         "permisos": permisos,
         "rol": str(usuario.id_rol),
         "id_empleado": usuario.id_empleado,
-        "numero_identificacion": numero_identificacion
+        "numero_identificacion": numero_identificacion,
+        "id_usuario": id_usuario
 
     }
 
@@ -749,7 +882,8 @@ def agregar_concepto(datos: ConceptoInput):
 
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
-
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
@@ -907,3 +1041,240 @@ def registrar_asistencia_biometrica(datos: AsistenciaBiometricaRequest):
     except Exception as e:
         print("❌ Error en endpoint:", e)
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+    
+#PUESTOS
+@app.post("/api/puestos/agregar")
+def agregar_puesto(datos: PuestoInput):
+    try:
+        AdminCRUD.agregar_puesto(datos.nombre)
+        return {"mensaje": "✅ Puesto agregado correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as ve:  
+        raise HTTPException(status_code=409, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@app.get("/api/puestos/")
+def obtener_puestos():
+    try:
+        return AdminCRUD.listar_puestos()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener los puestos")
+
+@app.delete("/api/puestos/{id_puesto}")
+def eliminar_puesto(id_puesto: int):
+    try:
+        AdminCRUD.eliminar_puesto(id_puesto)
+        return {"mensaje": "✅ Puesto eliminado correctamente"}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al eliminar puesto")
+
+#DEPARTAMENTOS
+@app.post("/api/departamentos/agregar")
+def agregar_departamento(datos: DepartamentoInput):
+    try:
+        AdminCRUD.agregar_departamento(datos.nombre, datos.descripcion)
+        return {"mensaje": "✅ Departamento agregado correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as ve:
+        raise HTTPException(status_code=409, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@app.get("/api/departamentos/")
+def obtener_departamentos():
+    try:
+        return AdminCRUD.listar_departamentos()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener los departamentos")
+
+@app.delete("/api/departamentos/{id_departamento}")
+def eliminar_departamento(id_departamento: int):
+    try:
+        AdminCRUD.eliminar_departamento(id_departamento)
+        return {"mensaje": "✅ Departamento eliminado correctamente"}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al eliminar departamento")
+
+#CATEGORIAS  
+@app.post("/api/categorias/agregar")
+def agregar_categoria(datos: CategoriaInput):
+    try:
+        AdminCRUD.agregar_categoria(datos.nombre_categoria)
+        return {"mensaje": "✅ Categoría agregada correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as ve:
+        raise HTTPException(status_code=409, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@app.get("/api/categorias/")
+def obtener_categorias():
+    try:
+        return AdminCRUD.listar_categorias()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener las categorías")
+
+@app.delete("/api/categorias/{id_categoria}")
+def eliminar_categoria(id_categoria: int):
+    try:
+        AdminCRUD.eliminar_categoria(id_categoria)
+        return {"mensaje": "✅ Categoría eliminada correctamente"}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al eliminar categoría")
+
+#configuracion de asistencias
+@app.get("/api/configuracion-asistencia/")
+def obtener_configuracion_asistencia():
+    try:
+        return AdminCRUD.listar_configuraciones_asistencia()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al obtener las configuraciones")
+
+@app.put("/api/configuracion-asistencia/{clave}")
+def actualizar_configuracion_asistencia(clave:str, datos: ConfigAsistenciaUpdate):
+    try:
+        return AdminCRUD.actualizar_configuracion_asistencia(clave,datos.valor)
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al actualizar la configuración")
+    
+#LISTADO DE PAISES, PROVINCIAS Y LOCALIDADES
+@app.get("/api/paises/")
+def listar_paises():
+    try:
+        return AdminCRUD.listar_paises()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al listar países")
+
+@app.get("/api/provincias/")
+def listar_provincias():
+    try:
+        return AdminCRUD.listar_provincias()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al listar provincias")
+
+@app.get("/api/localidades/")
+def listar_localidades():
+    try:
+        return AdminCRUD.listar_localidades()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al listar localidades")
+
+@app.get("/api/partidos/")
+def obtener_partidos():
+    try:
+        return AdminCRUD.listar_partidos()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al obtener partidos")
+
+
+@app.get("/api/partidos-filtrado/")
+def obtener_partidos_por_provincia(codigo_provincia: int = None):
+    try:
+        return AdminCRUD.listar_partidos_por_provincia(codigo_provincia)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener partidos")
+
+
+@app.get("/api/localidades-filtrado/")
+def obtener_localidades_por_provincia(codigo_provincia: int = None):
+    try:
+        return AdminCRUD.listar_localidades_por_provincia(codigo_provincia)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener localidades")
+    
+##Agregar informacion laboral a un empleado
+@app.post("/api/informacion-laboral/agregar")
+def agregar_informacion_laboral(request: InformacionLaboral):
+    try:
+        AdminCRUD.agregar_informacion_laboral(
+            id_empleado=request.id_empleado,
+            id_departamento=request.id_departamento,
+            id_puesto=request.id_puesto,
+            id_categoria=request.id_categoria,
+            fecha_ingreso=request.fecha_ingreso,
+            turno=request.turno,
+            hora_inicio_turno=request.hora_inicio_turno,
+            hora_fin_turno=request.hora_fin_turno,
+            cantidad_horas_trabajo=request.cantidad_horas_trabajo,
+            tipo_contrato=request.tipo_contrato,
+            estado=request.estado,
+            tipo_semana_laboral=request.tipo_semana_laboral
+        )
+        return {"mensaje": "Información laboral registrada correctamente"}
+
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get("/empleados/{id_empleado}/informacion-laboral-completa")
+def obtener_info_laboral_completa(id_empleado: int):
+    try:
+        info = AdminCRUD.buscar_informacion_laboral_completa_por_id_empleado(id_empleado)
+        if info:
+            return {
+                "id_departamento": info[0],
+                "id_puesto": info[1],
+                "id_categoria": info[2],
+                "fecha_ingreso": info[3].strftime('%Y-%m-%d'),  # Fecha en índice 3
+                "turno": info[4],
+                "hora_inicio_turno": str(info[5]),
+                "hora_fin_turno": str(info[6]),
+                "cantidad_horas_trabajo": info[7],
+                "tipo_contrato": info[8],
+                "estado": info[9],
+                "tipo_semana_laboral": info[10]
+                }       
+        raise HTTPException(status_code=404, detail="No encontrado")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/informacion-laboral/modificar")
+def modificar_info_laboral(request: InformacionLaboral):
+    try:
+        AdminCRUD.modificar_informacion_laboral(
+            id_empleado=request.id_empleado,
+            id_departamento=request.id_departamento,
+            id_puesto=request.id_puesto,
+            id_categoria=request.id_categoria,
+            fecha_ingreso=request.fecha_ingreso,
+            turno=request.turno,
+            hora_inicio_turno=request.hora_inicio_turno,
+            hora_fin_turno=request.hora_fin_turno,
+            cantidad_horas_trabajo=request.cantidad_horas_trabajo,
+            tipo_contrato=request.tipo_contrato,
+            estado=request.estado,
+            tipo_semana_laboral=request.tipo_semana_laboral
+        )
+        return {"mensaje": "Información laboral actualizada correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/habilitar-cuenta")
+def habilitar_cuenta(id_empleado: int):
+    try:
+        AdminCRUD.habilitar_cuenta(id_empleado)
+        return {"mensaje": f"Cuenta del empleado {id_empleado} habilitada correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al habilitar la cuenta")
+
+@app.get("/api/periodos-unicos/")
+def listar_periodos_unicos():
+    try:
+        return AdminCRUD.obtener_periodos_unicos()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al obtener los periodos únicos")
