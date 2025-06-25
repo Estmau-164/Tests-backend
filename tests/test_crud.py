@@ -260,7 +260,7 @@ class TestObtenerEmpleado:
 class TestActualizarDatosEmpleado:
     def test_actualizar_datos_empleado_existente(self, datos_empleados):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
-        empleado_actualizado = Empleado.actualizar_datos_personales(
+        empleado_actualizado = AdminCRUD.actualizar_datos_personales2(
             nuevo_empleado["id_empleado"],
             "11 5498-3219",
             "nuevocorreo@gmail.com",
@@ -280,7 +280,7 @@ class TestActualizarDatosEmpleado:
 
     def test_actualizar_datos_empleado_inexistente(self):
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 1,
                 "11 5498-3219",
                 "nuevocorreo@gmail.com",
@@ -294,7 +294,7 @@ class TestActualizarDatosEmpleado:
     def test_actualizar_ningun_dato_empleado(self, datos_empleados):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 nuevo_empleado["id_empleado"],
                 None,
                 None,
@@ -311,7 +311,7 @@ class TestActualizarDatosEmpleado:
     ):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 nuevo_empleado["id_empleado"],
                 telefono_invalido,
                 "nuevocorreo@gmail.com",
@@ -330,7 +330,7 @@ class TestActualizarDatosEmpleado:
     ):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 nuevo_empleado["id_empleado"],
                 "11 5498-3219",
                 correo_invalido,
@@ -344,7 +344,7 @@ class TestActualizarDatosEmpleado:
     def test_actualizar_datos_empleado_calle_invalida(self, datos_empleados):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 nuevo_empleado["id_empleado"],
                 "11 5498-3219",
                 "nuevocorreo@gmail.com",
@@ -358,7 +358,7 @@ class TestActualizarDatosEmpleado:
     def test_actualizar_datos_empleado_numero_calle_invalido(self, datos_empleados):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 nuevo_empleado["id_empleado"],
                 "11 5498-3219",
                 "nuevocorreo@gmail.com",
@@ -377,7 +377,7 @@ class TestActualizarDatosEmpleado:
     ):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 nuevo_empleado["id_empleado"],
                 "11 5498-3219",
                 "nuevocorreo@gmail.com",
@@ -391,7 +391,7 @@ class TestActualizarDatosEmpleado:
     def test_actualizar_datos_empleado_partido_invalido(self, datos_empleados):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 nuevo_empleado["id_empleado"],
                 "11 5498-3219",
                 "nuevocorreo@gmail.com",
@@ -405,7 +405,7 @@ class TestActualizarDatosEmpleado:
     def test_actualizar_datos_empleado_provincia_invalida(self, datos_empleados):
         nuevo_empleado = AdminCRUD.crear_empleado(datos_empleados[0])
         with pytest.raises(Exception):
-            Empleado.actualizar_datos_personales(
+            AdminCRUD.actualizar_datos_personales2(
                 nuevo_empleado["id_empleado"],
                 "11 5498-3219",
                 "nuevocorreo@gmail.com",
