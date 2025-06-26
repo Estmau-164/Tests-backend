@@ -21,7 +21,7 @@ from crud.crudUsuario import Usuario
 from pydantic import BaseModel, Field
 from typing import List
 from typing import Tuple, List
-from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoUpdate, NominaResponse,
+from .schemas import (EmpleadoResponse, EmpleadoBase, EmpleadoBase2, EmpleadoUpdate, NominaResponse,
                       NominaBase, NominaListResponse, EmpleadoNominaRequest, EmpleadoConsulta,
                       EmpleadoIDRequest, EmpleadoPeriodoRequest, EmpleadoIDIntRequest,
                       BuscarEmpleadoRequest, HorasRequest, CalculoNominaRequest, LoginResponse, LoginResponse,
@@ -39,7 +39,7 @@ import cloudinary.uploader
 from fastapi import UploadFile, File, Form
 from fastapi.responses import FileResponse
 import traceback
-from utils.correos import generar_codigo_verificacion, enviar_codigo_verificacion
+from utils.correos import generar_codigo_verificacion, enviar_codigo_verificacion, enviar_correo_manual
 from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
 import psycopg2
@@ -181,6 +181,31 @@ def crear_empleado(request: EmpleadoBase):
         import traceback
         print("[ERROR] Error inesperado:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+@app.post("/crear-empleado2/")
+def crear_empleado2(request: EmpleadoBase2):
+    try:
+
+        empleado = AdminCRUD.crear_empleado3(nuevo_empleado=request)
+
+        # Generar y enviar código solo si se creó bien
+        codigo = generar_codigo_verificacion()
+        enviar_codigo_verificacion(empleado['nombre'], empleado['correo_electronico'], codigo)
+
+        return {
+            "mensaje": "Empleado creado correctamente",
+            "id_empleado": empleado,
+            "codigo": codigo
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        import traceback
+        print("[ERROR] Error inesperado:\n", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 
 @app.get("/empleados/{numero_identificacion}")
@@ -692,6 +717,8 @@ def generar_recibo_pdf(id_empleado: int, id_nomina: int):
 
         # 5. Renderizar HTML
         template = env.get_template("recibo_template.html")
+        firma_path = os.path.abspath("utils/firma.png")
+        logo_path = os.path.abspath("utils/Logo_Empresa.png")
         html_rendered = template.render(
             id_empleado=row["id_empleado"],
             nombre=row["nombre"],
@@ -711,7 +738,9 @@ def generar_recibo_pdf(id_empleado: int, id_nomina: int):
             total_deducciones=total_deducciones,
             sueldo_neto=sueldo_neto,
             sueldo_neto_texto=num2words(sueldo_neto, lang='es').capitalize(),
-            conceptos=conceptos
+            conceptos=conceptos,
+            firma_path=firma_path,
+            logo_path=logo_path
         )
 
         pdf = HTML(string=html_rendered, base_url=os.getcwd()).write_pdf()
@@ -945,8 +974,8 @@ async def subir_documento(
         raise HTTPException(status_code=500, detail="Error al subir el título")
 
 
-@app.get("/api/documentos/cv/{empleado_id}")
-def obtener_documento(empleado_id: int, tipo: str):
+@app.get("/api/documentos/{tipo}/{empleado_id}")
+def obtener_documento(tipo: str, empleado_id: int):
     try:
         return AdminCRUD.obtener_documento_tipo(empleado_id, tipo)
     except ValueError as ve:
@@ -1278,3 +1307,18 @@ def listar_periodos_unicos():
         return AdminCRUD.obtener_periodos_unicos()
     except Exception:
         raise HTTPException(status_code=500, detail="Error al obtener los periodos únicos")
+
+
+class CorreoManual(BaseModel):
+    correo: str
+    asunto: str
+    mensaje: str
+
+@app.post("/api/enviar-correo-manual/")
+def enviar_correo_manual_endpoint(data: CorreoManual):
+    try:
+        enviar_correo_manual(data.correo, data.asunto, data.mensaje)
+        return {"detalle": "Correo enviado correctamente"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al enviar el correo: {e}")
+
