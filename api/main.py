@@ -45,7 +45,7 @@ from jinja2 import Environment, FileSystemLoader
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from num2words import num2words
-
+import json
 
 
 
@@ -199,12 +199,20 @@ def crear_empleado2(request: EmpleadoBase2):
         }
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        try:
+            errores = json.loads(str(e))  # Intentar decodificar lista
+            raise HTTPException(status_code=400, detail=errores)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail=str(e))
+
 
     except Exception as e:
+
         import traceback
+
         print("[ERROR] Error inesperado:\n", traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+        raise HTTPException(status_code=500, detail=str(e))  # 👈 Mostrar el error real
 
 
 

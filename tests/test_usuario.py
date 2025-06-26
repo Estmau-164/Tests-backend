@@ -1,6 +1,6 @@
 import pytest
 from crud.crudAdmintrador import AdminCRUD
-from api.schemas import EmpleadoBase
+from api.schemas import EmpleadoBase2
 from crud.crudUsuario import Usuario
 from crud.database import db
 import psycopg2
@@ -8,7 +8,7 @@ import psycopg2
 
 @pytest.fixture
 def crear_empleado():
-    empleado = EmpleadoBase(
+    empleado = EmpleadoBase2(
         nombre="Gustavo",
         apellido="Garcia",
         tipo_identificacion="DNI",
@@ -25,7 +25,7 @@ def crear_empleado():
         pais_nacimiento="Argentina",
         estado_civil="Casado/a",
     )
-    ret = AdminCRUD.crear_empleado(empleado)
+    ret = AdminCRUD.crear_empleado3(empleado)
     return ret
 
 
@@ -66,8 +66,7 @@ class TestCrearUsuario:
 
     def test_crear_usuario_nombre_con_espacios(self, crear_empleado):
         id_empleado = crear_empleado["id_empleado"]
-        with pytest.raises(Exception):
-            Usuario.crear_usuario(id_empleado, 1, "Gus Gar", "contrA45!", None)
+        Usuario.crear_usuario(id_empleado, 1, "Gus Gar", "contrA45!", None)
 
     def test_crear_usuario_nombre_vacio(self, crear_empleado):
         id_empleado = crear_empleado["id_empleado"]

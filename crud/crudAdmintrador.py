@@ -108,81 +108,6 @@ class AdminCRUD:
 
 
     @staticmethod
-    def crear_empleado2(nuevo_empleado):
-        """Registra un nuevo empleado usando el pool de conexiones"""
-        print("[DEBUG] Iniciando creación de empleado")
-
-        # Log de campos importantes
-        print(f"[DEBUG] Nombre: {nuevo_empleado.nombre}")
-        print(f"[DEBUG] Apellido: {nuevo_empleado.apellido}")
-        print(f"[DEBUG] Número identificación: {nuevo_empleado.numero_identificacion}")
-
-        conn = None
-        try:
-            conn = db.get_connection()
-            cur = conn.cursor()
-
-            # Conversión de campos
-            numero_calle = str(nuevo_empleado.numero_calle) if hasattr(nuevo_empleado,
-                                                                       'numero_calle') and nuevo_empleado.numero_calle is not None else None
-            # Calcular manualmente el próximo id_usuario
-            cur.execute("SELECT MAX(id_usuario) FROM usuario")
-            max_id = cur.fetchone()[0]
-            nuevo_id = (max_id or 0) + 1
-
-            # Query SQL
-            cur.execute(
-                """
-                INSERT INTO empleado (
-                    nombre, apellido, tipo_identificacion, numero_identificacion,
-                    fecha_nacimiento, correo_electronico, telefono, calle,
-                    numero_calle, localidad, partido, provincia, genero, 
-                    pais_nacimiento, estado_civil
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id_empleado, nombre, apellido, numero_identificacion, 
-                          numero_calle, telefono, correo_electronico
-                """,
-                (
-                    nuevo_empleado.nombre, nuevo_empleado.apellido, nuevo_empleado.tipo_identificacion,
-                    nuevo_empleado.numero_identificacion, nuevo_empleado.fecha_nacimiento,
-                    nuevo_empleado.correo_electronico, nuevo_empleado.telefono, nuevo_empleado.calle,
-                    numero_calle, nuevo_empleado.localidad, nuevo_empleado.partido,
-                    nuevo_empleado.provincia, nuevo_empleado.genero, nuevo_empleado.pais_nacimiento,
-                    nuevo_empleado.estado_civil
-                )
-            )
-
-            resultado = cur.fetchone()
-            conn.commit()
-
-            return {
-                "id_empleado": resultado[0],
-                "nombre": resultado[1],
-                "apellido": resultado[2],
-                "numero_identificacion": resultado[3],
-                "numero_calle": resultado[4],
-                "telefono": resultado[5],
-                "correo_electronico": resultado[6]
-            }
-
-        except psycopg2.IntegrityError as e:
-            if conn:
-                conn.rollback()
-            if "numero_identificacion" in str(e):
-                raise ValueError("El número de identificación ya existe")
-            raise ValueError(f"Error de integridad: {str(e)}")
-
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            raise ValueError(f"Error al crear empleado: {str(e)}")
-
-        finally:
-            if conn:
-                db.return_connection(conn)
-
-    @staticmethod
     def crear_empleado3(nuevo_empleado):
         conn = None
         try:
@@ -192,6 +117,8 @@ class AdminCRUD:
             # 👇 Corregir la secuencia por si quedó desfasada
             cur.execute("SELECT MAX(id_empleado) FROM empleado")
             max_id = cur.fetchone()[0] or 0
+            if max_id == None or max_id < 1:
+                max_id = 1
 
             cur.execute("SELECT pg_get_serial_sequence('empleado', 'id_empleado')")
             seq_name = cur.fetchone()[0]

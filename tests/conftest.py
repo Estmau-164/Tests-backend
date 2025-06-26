@@ -1,7 +1,7 @@
 import pytest
 from crud.database import db
 from crud.crudAdmintrador import AdminCRUD
-from api.schemas import EmpleadoBase
+from api.schemas import EmpleadoBase2
 import os
 
 
